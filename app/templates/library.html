@@ -1,0 +1,52 @@
+<html>
+<head>
+    <title>{{ url }}</title>
+    <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', path='/buttons.css') }}" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+</head>
+<body>
+    <input id="search" type="text" onkeydown="sendValue()" autocomplete="off">
+
+    <table id="books">
+        <tbody id="booksBody">
+        {% for book in books %}
+        <tr onclick="window.location='/book/{{ book.isbn }}'">
+            <td>{{ book.title }}</td>
+            <td>{{ book.author }}</td>
+            <td>{{ book.withdrawn }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <script>
+        const socket = new WebSocket("{{ ws_address }}");
+
+    socket.onmessage = function(event) {
+        const tab = document.getElementById("booksBody");
+        const newchildren = [];
+        JSON.parse(event.data).forEach(function(book) {
+            const tr = document.createElement("tr");
+            tr.onclick = function() {
+                window.location = '/book/' + book[0];
+            };
+
+            const titleTd = document.createElement("td");
+            titleTd.textContent = book[1];
+            tr.appendChild(titleTd);
+
+            const authorTd = document.createElement("td");
+            authorTd.textContent = book[2];
+            tr.appendChild(authorTd);
+
+            newchildren.push(tr);
+        });
+        tab.replaceChildren(...newchildren);
+    };
+        function sendValue() {
+            const input = document.getElementById("search");
+            socket.send(input.value);
+        }
+    </script>
+</body>
+</html>

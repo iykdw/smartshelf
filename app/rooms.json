@@ -1,0 +1,60 @@
+[
+    {
+        "value": "main",
+        "name": "Main Room",
+        "shelves": [
+            {
+                "value": 0,
+                "width": 360
+            },
+            {
+                "value": 1,
+                "width": 360
+            },
+            {
+                "value": 2,
+                "width": 360
+            },
+            {
+                "value": 3,
+                "width": 360
+            },
+            {
+                "value": 4,
+                "width": 360
+            },
+            {
+                "value": 5,
+                "width": 360
+            },
+            {
+                "value": 6,
+                "width": 1000
+            },
+            {
+                "value": 7,
+                "width": 900
+            },
+            {
+                "value": 8,
+                "width": 900
+            },
+            {
+                "value": 9,
+                "width": 900
+            },
+            {
+                "value": 10,
+                "width": 900
+            },
+            {
+                "value": 11,
+                "width": 900
+            },
+            {
+                "value": 12,
+                "width": 900
+            }
+        ]
+    }
+]
