@@ -1,4 +1,5 @@
 import json
+import math
 import logging
 import sqlite3
 from contextlib import closing
@@ -28,7 +29,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
 
-mm_per_page = 0.0727272727
+mm_per_page = 0.0696729243
 
 
 class Book(BaseModel):
@@ -151,6 +152,9 @@ def suggest_position(
             else:
                 curr = start + 1
 
+            print(empty)
+            print(curr)
+            print()
             while curr <= end:
                 empty.remove(curr)
                 curr += 1
@@ -174,6 +178,11 @@ def suggest_position(
             if empty[j] != empty[j + 1] - 1:
                 # If the next empty millimetre is not the next millimetre, finish this gap.
                 gaps[-1].append(empty[j])
+                print(gaps)
+
+        if len(gaps) == 0:
+            logging.info(f"    Shelf completely full; proceeding to next shelf")
+            continue
 
         gaps[-1].append(empty[-1])
         logging.info(f"    Gaps found - {gaps}")
@@ -421,6 +430,7 @@ async def shelve(isbn: str, request: Request):
     book_data = suggest_vals[0]
     neighbour = suggest_vals[1]
     room_list = [rooms[key] for key in rooms.keys()]
+    book.width = round(book.pages * mm_per_page)
 
     return templates.TemplateResponse(
         request=request,
