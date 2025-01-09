@@ -22,27 +22,27 @@
     <script>
         const socket = new WebSocket("{{ ws_address }}");
 
-    socket.onmessage = function(event) {
-        const tab = document.getElementById("booksBody");
-        const newchildren = [];
-        JSON.parse(event.data).forEach(function(book) {
-            const tr = document.createElement("tr");
-            tr.onclick = function() {
-                window.location = '/book/' + book[0];
-            };
+        socket.onmessage = function(event) {
+            const tab = document.getElementById("booksBody");
+            const newchildren = [];
+            JSON.parse(event.data).forEach(function(book) {
+                const tr = document.createElement("tr");
+                tr.onclick = function() {
+                    window.location = '/book/' + book[0];
+                };
 
-            const titleTd = document.createElement("td");
-            titleTd.textContent = book[1];
-            tr.appendChild(titleTd);
+                const titleTd = document.createElement("td");
+                titleTd.textContent = book[1];
+                tr.appendChild(titleTd);
 
-            const authorTd = document.createElement("td");
-            authorTd.textContent = book[2];
-            tr.appendChild(authorTd);
+                const authorTd = document.createElement("td");
+                authorTd.textContent = book[2];
+                tr.appendChild(authorTd);
 
-            newchildren.push(tr);
-        });
-        tab.replaceChildren(...newchildren);
-    };
+                newchildren.push(tr);
+            });
+            tab.replaceChildren(...newchildren);
+        };
         function sendValue() {
             const input = document.getElementById("search");
             socket.send(input.value);
