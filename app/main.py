@@ -156,7 +156,11 @@ def suggest_position(
             print(curr)
             print()
             while curr <= end:
-                empty.remove(curr)
+                try:
+                    empty.remove(curr)
+                except ValueError:
+                    logging.info("that fucking empty.remove(curr) bug, bestie, fix it")
+
                 curr += 1
 
         # gaps will be stored as [start_index, end_index]
