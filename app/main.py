@@ -430,7 +430,6 @@ async def shelve(isbn: str, request: Request):
     book_data = suggest_vals[0]
     neighbour = suggest_vals[1]
     room_list = [rooms[key] for key in rooms.keys()]
-    book.width = round(book.pages * mm_per_page)
 
     return templates.TemplateResponse(
         request=request,
