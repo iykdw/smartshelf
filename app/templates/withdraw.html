@@ -17,7 +17,13 @@
             <input type="text" id="room" name="room" value="{{ book.room }}" hidden>
             <input type="number" id="shelf" name="shelf" value="{{ book.shelf }}" hidden>
             <input type="number" id="position" name="position" value="{{ book.position }}" hidden>
-            <input type="text" id="withdrawn" name="withdrawn" value="{{ book.withdrawn }}">
+            <select id="user" name="user">
+                {% for user in users%}
+                <option value="{{ user[0] }}">{{user[0]}}</option>
+                {% endfor %}
+            </select>
+            <input type="text" id="time" name="time" value="{{ time }}" hidden>
+            <input type="text" id="withdrawn" name="withdrawn" value="withdrawn" hidden>
             <input class="button-3" role="button" type="submit" value="Submit">
         </form>
     </body>

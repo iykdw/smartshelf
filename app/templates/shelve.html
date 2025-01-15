@@ -30,8 +30,8 @@
         </select>
         <br />
         <input type="number" id="position" name="position" value="{{ book.position }}" hidden>
-
-        <input type="number" id="withdrawn" name="withdrawn" value="{{ book.withdrawn }}" hidden>
+        <input type="text" id="withdrawn" name="withdrawn" value="shelved" hidden>
+        <input type="text" id="time" name="time" value="{{ time }}" hidden>
         <input style="margin-top: 15px; "class="button-3" role="button" type="submit" value="Shelve">
     </form>
     <p>Shelve next to <span id="neighbour">{{ neighbour }}</span></p>

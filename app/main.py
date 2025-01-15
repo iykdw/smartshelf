@@ -1,7 +1,7 @@
 import json
-import math
 import logging
 import sqlite3
+import time
 from contextlib import closing
 from datetime import datetime
 from typing import Annotated
@@ -22,6 +22,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from pydantic import Field
 
 app = FastAPI()
 
@@ -43,6 +44,8 @@ class Book(BaseModel):
     shelf: int
     position: int
     withdrawn: str
+    time: Optional[str] = Field(default="0")
+    user: Optional[str] = Field(default="")
 
 
 class Shelf(BaseModel):
@@ -155,6 +158,7 @@ def suggest_position(
             print(empty)
             print(curr)
             print()
+
             while curr <= end:
                 try:
                     empty.remove(curr)
@@ -185,7 +189,8 @@ def suggest_position(
                 print(gaps)
 
         if len(gaps) == 0:
-            logging.info(f"    Shelf completely full; proceeding to next shelf")
+            logging.info("    Shelf completely full; proceeding to next shelf")
+
             continue
 
         gaps[-1].append(empty[-1])
@@ -345,6 +350,21 @@ db_execute(
             STRICT""",
     (),
 )
+db_execute(
+    """CREATE TABLE IF NOT EXISTS transactions (
+           isbn TEXT,
+           event TEXT,
+           shelved INTEGER,
+           time INTEGER UNIQUE,
+           user TEXT)
+           STRICT""",
+    (),
+)
+db_execute(
+    """CREATE TABLE IF NOT EXISTS users (
+            name TEXT) STRICT""",
+    (),
+)
 logger.info("DB check complete.")
 
 
@@ -406,6 +426,29 @@ def edit_book(request: Request, isbn: str):
 
 @app.post("/update")
 async def update_book(book: Annotated[Book, Form()]):
+    print(book)
+
+    if book.time != "0":
+        time = round(float(book.time))
+
+        if book.withdrawn == "withdrawn":
+            db_execute(
+                """INSERT INTO transactions VALUES (?, ?, ?, ?, ?)""",
+                (book.isbn, "withdrawn", 0, time, book.user),
+            )
+
+            book.withdrawn = (
+                f"{datetime.fromtimestamp(time).strftime('%Y-%m-%d')} by {book.user}"
+            )
+
+        elif book.withdrawn == "shelved":
+            db_execute(
+                """INSERT INTO transactions VALUES (?, ?, ?, ?, ?)""",
+                (book.isbn, "shelved", 1, time, book.user),
+            )
+
+            book.withdrawn = ""
+
     db_execute(
         """INSERT OR REPLACE INTO books VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         format_book_for_db_insertion(book),
@@ -444,6 +487,7 @@ async def shelve(isbn: str, request: Request):
             "ws_address": ws_address,
             "rooms": room_list,
             "shelves": range(len(rooms[first_room].shelves)),
+            "time": time.time(),
         },
     )
 
@@ -454,19 +498,19 @@ def withdraw(isbn: str, request: Request):
         db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (isbn,))
     )
 
-    book_data.withdrawn = f"{datetime.today().strftime('%Y-%m-%d')} by "
+    users = db_fetchall("""SELECT * FROM users""")
     book_data.shelf = -1
     book_data.position = -1
 
     return templates.TemplateResponse(
         request=request,
         name="withdraw.html",
-        context={"book": book_data},
+        context={"book": book_data, "users": users, "time": time.time()},
     )
 
 
 @app.get("/locate/{isbn}", response_class=HTMLResponse)
-def withdraw(isbn: str, request: Request):
+def locate(isbn: str, request: Request):
     book_data = format_db_record_as_book(
         db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (isbn,))
     )
@@ -515,5 +559,9 @@ async def shelve_websocket(websocket: WebSocket):
         shelves = list(range(len(room.shelves)))
 
         await websocket.send_json(
-            {"neighbour": neighbour, "shelves": shelves, "shelf": shelf}
+            {
+                "neighbour": neighbour,
+                "shelves": shelves,
+                "shelf": shelf,
+            }
         )
