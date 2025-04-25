@@ -1,0 +1,30 @@
+<html>
+    <head>
+        <title>Withdrawing {{ book.title }}</title>
+        <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
+        <link href="{{ url_for('static', path='/buttons.css') }}" rel="stylesheet">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+    </head>
+    <body>
+        <h1>Withdrawing {{ book.title }}</h1>
+        <form action="/update" method="post">
+            <input type="text" id="isbn" name="isbn" value="{{ book.isbn }}" hidden>
+            <input type="text" id="title" name="title" value="{{ book.title }}" hidden>
+            <input type="text" id="subtitle" name="subtitle" value="{{ book.subtitle }}" hidden>
+            <input type="text" id="author" name="author" value="{{ book.author }}" hidden>
+            <input type="number" id="pages" name="pages" value="{{ book.pages }}" hidden>
+            <input type="number" id="width" name="width" value="{{ book.width}}" hidden>
+            <input type="text" id="room" name="room" value="{{ book.room }}" hidden>
+            <input type="number" id="shelf" name="shelf" value="{{ book.shelf }}" hidden>
+            <input type="number" id="position" name="position" value="{{ book.position }}" hidden>
+            <select id="user" name="user">
+                {% for user in users%}
+                <option value="{{ user[0] }}">{{user[0]}}</option>
+                {% endfor %}
+            </select>
+            <input type="text" id="time" name="time" value="{{ time }}" hidden>
+            <input type="text" id="withdrawn" name="withdrawn" value="withdrawn" hidden>
+            <input class="button-3" role="button" type="submit" value="Submit">
+        </form>
+    </body>
+</html>
