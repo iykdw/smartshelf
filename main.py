@@ -1,6 +1,7 @@
 import json
 import logging
 import sqlite3
+import sys
 import time
 from contextlib import closing
 from datetime import datetime
@@ -31,6 +32,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 mm_per_page = 0.0696729243
+
+persist_dir = "storage"
 
 
 class Book(BaseModel):
@@ -242,7 +245,7 @@ def log_trace(statement):
 
 
 def _db_execute(command: str, args: tuple, com_type: int) -> Optional[List]:
-    with closing(sqlite3.connect("books.db")) as connection:
+    with closing(sqlite3.connect(f"{persist_dir}/books.db")) as connection:
         connection.set_trace_callback(log_trace)
         with closing(connection.cursor()) as c:
             if com_type == 2:
@@ -270,7 +273,7 @@ def db_fetchall(command: str, args: tuple = ()) -> List:
 
 
 def get_rooms() -> Dict[str, Room]:
-    with open("rooms.json", "r") as f:
+    with open(f"{persist_dir}/rooms.json", "r") as f:
         room_data = json.loads(f.read())
 
     rooms: Dict[str, Room] = {}
@@ -323,11 +326,13 @@ def format_db_record_as_book(record: Tuple[str | int]) -> Book:
 
 
 logging.basicConfig(
-    filename="smartshelf.log",
-    filemode="a",
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d:%H:%M:%S",
     level=logging.INFO,
+    handlers=[
+        logging.FileHandler(f"{persist_dir}/debug.log"),
+        logging.StreamHandler(sys.stdout),
+    ],
 )
 
 logger = logging.getLogger(__name__)
