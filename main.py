@@ -33,7 +33,7 @@ templates = Jinja2Templates(directory="templates")
 
 mm_per_page = 0.0696729243
 
-persist_dir = "storage"
+persist_dir = "/storage"
 
 
 class Book(BaseModel):
