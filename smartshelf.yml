@@ -1,0 +1,9 @@
+services:
+  smartshelf:
+    image: smartshelf
+    container_name: smartshelf
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    volumes:
+      - /bulk/config/smartshelf:/storage
