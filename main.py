@@ -57,7 +57,7 @@ class Book(BaseModel):
 
 
 class Shelf(BaseModel):
-    value: int
+    value: int|str
     width: int
 
 
