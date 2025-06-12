@@ -1,0 +1,78 @@
+[
+    {
+        "value": "living",
+        "name": "Living Room",
+        "shelves": {
+            "tvleft1": {
+                "name": "TV Left 1",
+                "width": 360
+            },
+            "tvleft2": {
+                "name": "TV Left 2",
+                "width": 360
+            },
+            "tvleft3": {
+                "name": "TV Left 3",
+                "width": 360
+            },
+            "tvleft4": {
+                "name": "TV Left 4",
+                "width": 360
+            },
+            "tvleft5": {
+                "name": "TV Left 5",
+                "width": 360
+            },
+            "tvleft6":{
+                "name": "TV Left 6",
+                "width": 360
+            },
+            "tvleft7": {
+                "name": "TV Left 7",
+                "width": 360
+            },
+            "tvright1": {
+                "name": "TV Right 1",
+                "width": 360
+            },
+            "tvright2": {
+                "name": "TV Right 2",
+                "width": 360
+            },
+            "tvright3": {
+                "name": "TV Right 3",
+                "width": 360
+            },
+            "tvright4": {
+                "name": "TV Right 4",
+                "width": 360
+            },
+            "tvright5": {
+                "name": "TV Right 5",
+                "width": 360
+            },
+            "tvright6": {
+                "name": "TV Right 6",
+                "width": 360
+            },
+            "tvright7": {
+                "name": "TV Right 7",
+                "width": 360
+            }
+        }
+    },
+    {
+        "value": "office",
+        "name": "Office",
+        "shelves": {
+            "desk": {
+                "name": "desk",
+                "width": 350
+            },
+            "office": {
+                "name": "window",
+                "width": 500
+            }
+        }
+    }
+]

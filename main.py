@@ -9,7 +9,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
-from typing import Union
 from urllib.request import urlopen
 
 from fastapi import FastAPI
@@ -39,6 +38,9 @@ persist_dir = "/storage"
 
 default_user_name = "foo"
 
+class CouldNotShelveError(Exception):
+    pass
+
 class Book(BaseModel):
     isbn: str
     title: str
@@ -47,24 +49,27 @@ class Book(BaseModel):
     pages: int
     width: int
     room: str
-    shelf: int
+    shelf: str
     position: int
     withdrawn: str
-    time: Optional[str] = Field(default="0")
+    shelf_name: Optional[str] = Field(default="")
+    time: Optional[int] = Field(default="0")
     user: Optional[str] = Field(default="")
     json: Optional[dict] = Field(default={})
     natlang_position: Optional[str] = Field(default="")
 
+type BookTuple = Tuple[str, str, str, str, int, str, str, int, int, str] 
 
 class Shelf(BaseModel):
-    value: int|str
+    id: str
+    name: str
     width: int
 
 
 class Room(BaseModel):
     name: str
     value: str
-    shelves: List[Shelf]
+    shelves: dict[str, Shelf]
 
 
 def get_data_from_gb(isbn) -> Book:
@@ -130,21 +135,25 @@ def get_data_from_gb(isbn) -> Book:
 
 
 def suggest_position(
-    book: Book, room: Room, requested_shelf: int = -1
+    book: Book, room: Room, requested_shelf: str = ""
 ) -> Tuple[Book, str]:
-    shelves = room.shelves.copy()
+    shelves = []
 
-    if requested_shelf != -1:
-        req_shelf = [shelves[requested_shelf]]
-        del shelves[requested_shelf]
-        shelves = req_shelf + shelves
+    if requested_shelf != "":
+        req_shelf = room.shelves[requested_shelf]
+        shelves.append(req_shelf)
+        del room.shelves[requested_shelf]
+        shelves += list(room.shelves.values())
+    else:
+        shelves = list(room.shelves.values())
 
-    for i, shelf in enumerate(shelves):
-        books_on_shelf = db_fetchall(
+
+    for shelf in shelves:
+        books_on_shelf: List[Tuple[str, int, int]] = db_fetchall( #type:ignore because I know that this is fine
             """SELECT title, width, position FROM books WHERE room = ? AND shelf = ? ORDER BY position""",
             (
                 room.value,
-                shelf.value,
+                shelf.id,
             ),
         )
         empty: List[int] = list(range(shelf.width))
@@ -153,7 +162,7 @@ def suggest_position(
         )
 
         for shelved_book in books_on_shelf:
-            hw = shelved_book[1] / 2  # halved width
+            hw  = int(shelved_book[1] / 2) # halved width
             start = int(shelved_book[2] - hw)
             end = int(shelved_book[2] + hw)
             logging.info(f"    {shelved_book[0]} in position {start}-{end}")
@@ -180,7 +189,6 @@ def suggest_position(
 
         for j in range(len(empty) - 1):
             # Iterate over all the millimetres not currently occupied by a book
-
             if len(gaps) == 0 and empty[0] == 0:
                 # If there are no gaps known, start a new gap at -1 because... offset reasons
                 gaps.append([-1])
@@ -215,7 +223,7 @@ def suggest_position(
             continue
 
         suggested = gaps[0][0] + int(book.width / 2)
-        book.shelf = shelf.value
+        book.shelf = shelf.id
         book.position = suggested
         logging.info(f"    Suggested position is {gaps[0][0]}")
 
@@ -244,6 +252,8 @@ def suggest_position(
             neighbour,
         )
 
+    raise CouldNotShelveError
+
 
 def log_trace(statement):
     logging.info(statement)
@@ -269,13 +279,17 @@ def db_execute(command: str, args: tuple = ()) -> None:
     _db_execute(command, args, 0)
 
 
-def db_fetchone(command: str, args: tuple = ()) -> List:
-    return _db_execute(command, args, 1)
+def db_fetchone(command: str, args: tuple = ()) -> Tuple:
+    retval = _db_execute(command, args, 1)
+    if retval is not None:
+        return retval #type: ignore
+    return [] #type: ignore
 
-
-def db_fetchall(command: str, args: tuple = ()) -> List:
-    return _db_execute(command, args, 2)
-
+def db_fetchall(command: str, args: tuple = ()) -> Tuple:
+    retvals = _db_execute(command, args, 2)
+    if retvals is not None:
+        return retvals #type: ignore
+    return [] #type: ignore
 
 def get_rooms() -> Dict[str, Room]:
     with open(f"{persist_dir}/rooms.json", "r") as f:
@@ -284,21 +298,21 @@ def get_rooms() -> Dict[str, Room]:
     rooms: Dict[str, Room] = {}
 
     for room in room_data:
+        shelf_ids = room["shelves"].keys()
+        shelves = {}
+        for shelf_id in shelf_ids:
+            shelves[shelf_id] = Shelf(id=shelf_id, width=room["shelves"][shelf_id]["width"], name=room["shelves"][shelf_id]["name"])
         this_room = Room(
             name=room["name"],
             value=room["value"],
-            shelves=[
-                Shelf(width=shelf["width"], value=shelf["value"])
-
-                for shelf in room["shelves"]
-            ],
+            shelves=shelves
         )
         rooms[room["value"]] = this_room
 
     return rooms
 
 
-def format_book_for_db_insertion(book: Book) -> Tuple[Union[str, int]]:
+def format_book_for_db_insertion(book: Book) -> BookTuple:
     return_data = (
         book.isbn,
         book.title,
@@ -315,7 +329,7 @@ def format_book_for_db_insertion(book: Book) -> Tuple[Union[str, int]]:
     return return_data
 
 
-def format_db_record_as_book(record: Tuple[str | int]) -> Book:
+def format_db_record_as_book(record: BookTuple) -> Book:
     return Book(
         isbn=record[0],
         title=record[1],
@@ -377,40 +391,61 @@ db_execute(
 )
 logger.info("DB check complete.")
 
+"""
+for shelf in list(get_rooms()["living"].shelves.values()):
+    db_execute("UPDATE books SET shelf = ? WHERE shelf=?;", (shelf.id, shelf.name))
+"""
 
 @app.get("/", response_class=HTMLResponse)
-def get_library(request: Request):
+@app.get("/{isbn}", response_class=HTMLResponse)
+def get_library(request: Request, isbn: Optional[str] = ""):
+
     user_name = request.headers.get('Remote-Name')
     if user_name is None:
         user_name = default_user_name
 
-    books_raw = db_fetchall("""SELECT * FROM books""")
+    books_raw = db_fetchall("""SELECT * FROM books""")[::-1]
 
     books = []
 
     for book in books_raw:
-        record_as_book = format_db_record_as_book(book)
+        book = format_db_record_as_book(book)
         
         rooms = get_rooms()
-        room = record_as_book.room
+        room = book.room
         if room == "":
             room = next(iter(rooms))
-            
-        
-        shelf_width = rooms[room].shelves[int(record_as_book.shelf)].width
-        pos = NatLangFractions(record_as_book.position, shelf_width, margin=0.05)
-        if pos is not None:
-            record_as_book.natlang_position = pos
 
-        record_as_book.json = record_as_book.dict()
-        books.append(record_as_book)
+        logging.info(book.shelf)
+        logging.info(rooms[room].shelves) 
+        
+        shelf_width = rooms[room].shelves[book.shelf].width
+        pos = NatLangFractions(book.position, shelf_width, margin=0.05)
+        if pos is not None:
+            book.natlang_position = pos
+
+        book.shelf_name = rooms[book.room].shelves[book.shelf].name
+        book.json = book.dict()
+        books.append(book)
+
+    if isbn != "":
+        book_data = db_fetchone("""SELECT * FROM books WHERE isbn = ?""", (isbn,))
+
+        if not book_data:
+            book = get_data_from_gb(isbn)
+        else:
+            book = format_db_record_as_book(book_data)
+        book.json = book.dict()
+    else:
+        book = ""
+
 
     ws_address = f"wss://{str(request.url).split('/')[2]}/search"
 
     return templates.TemplateResponse(
-        request=request,
+        request=request, 
         name="index.html",
-        context={"user": user_name, "books": books, "ws_address": ws_address},
+        context={"user": user_name, "select_book": book, "books": books, "ws_address": ws_address},
     )
 
 class WithdrawRequest(BaseModel):
@@ -424,7 +459,7 @@ def withdraw(req: WithdrawRequest):
         db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (req.isbn,))
     )
 
-    book_data.time = time.time()
+    book_data.time = str(time.time())
     book_data.user = req.user_name
     book_data.withdrawn = "withdrawn"
     response = update_book(book_data)
@@ -432,13 +467,13 @@ def withdraw(req: WithdrawRequest):
     return JSONResponse(content=jsonable_encoder(response))
     
 
-@app.get("/book/{isbn}", response_class=HTMLResponse)
+@app.get("/{isbn}", response_class=HTMLResponse)
 def hit_endpoint(request: Request, isbn: str):
     book_data = db_fetchone("""SELECT * FROM books WHERE isbn = ?""", (isbn,))
 
     if not book_data:
         book_data = get_data_from_gb(isbn)
-
+ 
         db_execute(
             """INSERT OR REPLACE INTO books VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             format_book_for_db_insertion(book_data),
@@ -449,7 +484,7 @@ def hit_endpoint(request: Request, isbn: str):
     book_data = format_db_record_as_book(book_data)
 
     return templates.TemplateResponse(
-        request=request, name="book.html", context={"book": book_data}
+            request=request, name="index.html", context={"book": book_data}
     )
 
 
@@ -472,25 +507,22 @@ def edit_book(request: Request, isbn: str):
 
 @app.post("/update")
 def update_book(book: Book):
-    print(book)
-
-    if book.time != "0":
-        time = round(float(book.time))
-
+    if book.time:
         if book.withdrawn == "withdrawn":
+            logger.info(book.isbn, book.user)
             db_execute(
                 """INSERT INTO transactions VALUES (?, ?, ?, ?, ?)""",
-                (book.isbn, "withdrawn", 0, time, book.user),
+                (book.isbn, "withdrawn", 0, int(time.time()), book.user),
             )
 
             book.withdrawn = (
-                f"{datetime.fromtimestamp(time).strftime('%Y-%m-%d')} by {book.user}"
+                f"{datetime.fromtimestamp(float(book.time)).strftime('%Y-%m-%d')} by {book.user}"
             )
 
         elif book.withdrawn == "shelved":
             db_execute(
                 """INSERT INTO transactions VALUES (?, ?, ?, ?, ?)""",
-                (book.isbn, "shelved", 1, time, book.user),
+                (book.isbn, "shelved", 1, book.time, book.user),
             )
 
             book.withdrawn = ""
@@ -599,3 +631,9 @@ async def shelve_websocket(websocket: WebSocket):
                 "shelf": shelf,
             }
         )
+
+@app.get("/book/{isbn}")
+def redirect(isbn: str):
+    return RedirectResponse(
+        url=f"/{isbn}", status_code=status.HTTP_303_SEE_OTHER
+    )
