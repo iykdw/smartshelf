@@ -5,7 +5,6 @@ import sys
 import time
 from contextlib import closing
 from datetime import datetime
-from typing import Annotated
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -14,16 +13,19 @@ from typing import Union
 from urllib.request import urlopen
 
 from fastapi import FastAPI
-from fastapi import Form
 from fastapi import Request
 from fastapi import status
 from fastapi import WebSocket
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from pydantic import Field
+
+from natlangfractions import NatLangFractions
 
 app = FastAPI()
 
@@ -35,6 +37,7 @@ mm_per_page = 0.0696729243
 
 persist_dir = "/storage"
 
+default_user_name = "foo"
 
 class Book(BaseModel):
     isbn: str
@@ -49,6 +52,8 @@ class Book(BaseModel):
     withdrawn: str
     time: Optional[str] = Field(default="0")
     user: Optional[str] = Field(default="")
+    json: Optional[dict] = Field(default={})
+    natlang_position: Optional[str] = Field(default="")
 
 
 class Shelf(BaseModel):
@@ -375,21 +380,57 @@ logger.info("DB check complete.")
 
 @app.get("/", response_class=HTMLResponse)
 def get_library(request: Request):
+    user_name = request.headers.get('Remote-Name')
+    if user_name is None:
+        user_name = default_user_name
+
     books_raw = db_fetchall("""SELECT * FROM books""")
 
     books = []
 
     for book in books_raw:
-        books.append(format_db_record_as_book(book))
+        record_as_book = format_db_record_as_book(book)
+        
+        rooms = get_rooms()
+        room = record_as_book.room
+        if room == "":
+            room = next(iter(rooms))
+            
+        
+        shelf_width = rooms[room].shelves[int(record_as_book.shelf)].width
+        pos = NatLangFractions(record_as_book.position, shelf_width, margin=0.05)
+        if pos is not None:
+            record_as_book.natlang_position = pos
+
+        record_as_book.json = record_as_book.dict()
+        books.append(record_as_book)
 
     ws_address = f"wss://{str(request.url).split('/')[2]}/search"
 
     return templates.TemplateResponse(
         request=request,
-        name="library.html",
-        context={"books": books, "ws_address": ws_address},
+        name="index.html",
+        context={"user": user_name, "books": books, "ws_address": ws_address},
     )
 
+class WithdrawRequest(BaseModel):
+    isbn: str
+    user_name: str
+
+@app.post("/withdraw")
+def withdraw(req: WithdrawRequest):
+    print(req.isbn)
+    book_data = format_db_record_as_book(
+        db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (req.isbn,))
+    )
+
+    book_data.time = time.time()
+    book_data.user = req.user_name
+    book_data.withdrawn = "withdrawn"
+    response = update_book(book_data)
+    print(response)
+    return JSONResponse(content=jsonable_encoder(response))
+    
 
 @app.get("/book/{isbn}", response_class=HTMLResponse)
 def hit_endpoint(request: Request, isbn: str):
@@ -430,7 +471,7 @@ def edit_book(request: Request, isbn: str):
 
 
 @app.post("/update")
-async def update_book(book: Annotated[Book, Form()]):
+def update_book(book: Book):
     print(book)
 
     if book.time != "0":
@@ -464,7 +505,9 @@ async def update_book(book: Annotated[Book, Form()]):
             url=f"/shelve/{book.isbn}", status_code=status.HTTP_303_SEE_OTHER
         )
 
-    return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+    if book.time != "0":
+        print(book.withdrawn)
+        return book.withdrawn
 
 
 @app.get("/shelve/{isbn}", response_class=HTMLResponse)
@@ -497,27 +540,13 @@ async def shelve(isbn: str, request: Request):
     )
 
 
-@app.get("/withdraw/{isbn}", response_class=HTMLResponse)
-def withdraw(isbn: str, request: Request):
-    book_data = format_db_record_as_book(
-        db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (isbn,))
-    )
-
-    users = db_fetchall("""SELECT * FROM users""")
-    book_data.shelf = -1
-    book_data.position = -1
-
-    return templates.TemplateResponse(
-        request=request,
-        name="withdraw.html",
-        context={"book": book_data, "users": users, "time": time.time()},
-    )
+    
 
 
 @app.get("/locate/{isbn}", response_class=HTMLResponse)
 def locate(isbn: str, request: Request):
     book_data = format_db_record_as_book(
-        db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (isbn,))
+            db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (isbn,))
     )
 
     return templates.TemplateResponse(

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+
+    <title>Hello, world!</title>
+  </head>
+  <body>
+      <div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+          <div class="modal-dialog" role="document">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Modal title</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <div class="modal-body">
+                  <p id="modal-last-borrowed"></p>
+                  <p id="modal-position"></p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="modalWithdrawReturn" onclick=function() {}; data-dismiss="modal">Withdraw</button>
+              </div>
+            </div>
+          </div>
+        </div>
+    <input id="search" type="text" onkeydown="sendValue()" autocomplete="off">
+
+    <table id="books">
+        <tbody id="booksBody">
+        {% for book in books %}
+        <tr onclick='updateModal({{ book["json"] | tojson() }})'>
+            <td>{{ book.title }}</td>
+            <td>{{ book.author }}</td>
+            <td id="{{ book.isbn }}-withdrawn">{{ book.withdrawn }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <script>
+        console.log({{ books[0]['json'] | tojson() }});
+        function updateModal(book) {
+            console.log(book)
+
+            document.getElementById("exampleModalLabel").textContent=book['title'];
+            if (book['withdrawn'] == "") {
+                document.getElementById("modal-last-borrowed").textContent="Book never borrowed.";
+            } else {
+                var withdrawn = "Last borrowed " + book['withdrawn'] + "."
+                document.getElementById("modal-last-borrowed").textContent=withdrawn;
+            }
+            if (book['shelf'] != -1) {
+                if (book["natlang_position"] == "") {
+                    var position = "Shelved on shelf " + book['shelf'] + " at position " + book['position'] + '.';
+                } else {
+                    var position = "Shelved on shelf " + book['shelf'] + " about " + book['natlang_position'] + " in from the left."
+                }
+                document.getElementById("modal-position").textContent=position
+            }
+
+            if (book.withdrawn == "") {
+                document.getElementById("modalWithdrawReturn").onclick = async() => {
+                    const response = await fetch('/withdraw', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({'isbn': book['isbn'], 'user_name': "{{ user }}"}),
+                    });
+
+                    withdrawn_text = await response.json();
+                    document.getElementById(book['isbn'] + '-withdrawn').textContent = withdrawn_text;
+                };
+            } else {
+                document.getElementById("modalWithdrawReturn").textContent="Shelve";
+            }
+
+            $("#exampleModal").modal('show');
+        };
+
+        let socket = new WebSocket("{{ ws_address }}");
+        while (!socket.readyState === WebSocket.OPEN) {
+
+        }
+
+        socket.onmessage = function(event) {
+            const tab = document.getElementById("booksBody");
+            const newchildren = [];
+            JSON.parse(event.data).forEach(function(book) {
+                const tr = document.createElement("tr");
+                tr.onclick = function() {
+                    window.location = '/book/' + book[0];
+                };
+
+                const titleTd = document.createElement("td");
+                titleTd.textContent = book[1];
+                tr.appendChild(titleTd);
+
+                const authorTd = document.createElement("td");
+                authorTd.textContent = book[2];
+                tr.appendChild(authorTd);
+
+                newchildren.push(tr);
+            });
+            tab.replaceChildren(...newchildren);
+        };
+
+        function sendValue() {
+            const input = document.getElementById("search");
+            socket.send(input.value);
+        }
+    </script>
+
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+  </body>
+</html>
