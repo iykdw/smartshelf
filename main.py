@@ -34,7 +34,7 @@ templates = Jinja2Templates(directory="templates")
 
 mm_per_page = 0.0696729243
 
-persist_dir = "/storage"
+persist_dir = "storage"
 
 default_user_name = "foo"
 
@@ -399,7 +399,6 @@ for shelf in list(get_rooms()["living"].shelves.values()):
 @app.get("/", response_class=HTMLResponse)
 @app.get("/{isbn}", response_class=HTMLResponse)
 def get_library(request: Request, isbn: Optional[str] = ""):
-
     user_name = request.headers.get('Remote-Name')
     if user_name is None:
         user_name = default_user_name
@@ -416,15 +415,16 @@ def get_library(request: Request, isbn: Optional[str] = ""):
         if room == "":
             room = next(iter(rooms))
 
-        logging.info(book.shelf)
-        logging.info(rooms[room].shelves) 
-        
-        shelf_width = rooms[room].shelves[book.shelf].width
-        pos = NatLangFractions(book.position, shelf_width, margin=0.05)
-        if pos is not None:
-            book.natlang_position = pos
+        if book.shelf == "" or book.position == -1:
+            logger.info(f"Could not calculate position of book {book.title} on shelf {book.shelf} at position {book.position}.")
+        else:
+            shelf_width = rooms[room].shelves[book.shelf].width
+            pos = NatLangFractions(book.position, shelf_width, margin=0.05)
+            if pos is not None:
+                book.natlang_position = pos
 
-        book.shelf_name = rooms[book.room].shelves[book.shelf].name
+            book.shelf_name = rooms[book.room].shelves[book.shelf].name
+
         book.json = book.dict()
         books.append(book)
 
@@ -437,8 +437,7 @@ def get_library(request: Request, isbn: Optional[str] = ""):
             book = format_db_record_as_book(book_data)
         book.json = book.dict()
     else:
-        book = ""
-
+        book = Book(isbn="", title="", subtitle="", author="", pages=0, width=0, room="", shelf="", position=0, withdrawn="")
 
     ws_address = f"wss://{str(request.url).split('/')[2]}/search"
 
@@ -455,16 +454,30 @@ class WithdrawRequest(BaseModel):
 @app.post("/withdraw")
 def withdraw(req: WithdrawRequest):
     print(req.isbn)
-    book_data = format_db_record_as_book(
+    book = format_db_record_as_book(
         db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (req.isbn,))
     )
 
-    book_data.time = str(time.time())
-    book_data.user = req.user_name
-    book_data.withdrawn = "withdrawn"
-    response = update_book(book_data)
-    print(response)
-    return JSONResponse(content=jsonable_encoder(response))
+    logger.info(book.isbn , req.user_name)
+    db_execute(
+        """INSERT INTO transactions VALUES (?, ?, ?, ?, ?)""",
+        (book.isbn, "withdrawn", 0, int(time.time()), req.user_name),
+    )
+
+    book.withdrawn = (
+        f"{datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d')} by {req.user_name}"
+    )
+
+    book.shelf = ""
+    book.position = -1
+
+    
+    db_execute(
+        """INSERT OR REPLACE INTO books VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        format_book_for_db_insertion(book),
+    )
+
+    return JSONResponse(content=jsonable_encoder(book.withdrawn))
     
 
 @app.get("/{isbn}", response_class=HTMLResponse)
@@ -495,10 +508,10 @@ def edit_book(request: Request, isbn: str):
     )
 
     return templates.TemplateResponse(
-        request=request,
+        request=request, 
         name="validate.html",
         context={
-            "book": book_data,
+            "book": book_data ,
             "rooms": get_rooms().keys(),
             "mm_per_page": mm_per_page,
         },
@@ -507,9 +520,9 @@ def edit_book(request: Request, isbn: str):
 
 @app.post("/update")
 def update_book(book: Book):
-    if book.time:
-        if book.withdrawn == "withdrawn":
-            logger.info(book.isbn, book.user)
+    if book.time: 
+        if book.withdrawn ==  "withdrawn":
+            logger.info(book.isbn , book.user)
             db_execute(
                 """INSERT INTO transactions VALUES (?, ?, ?, ?, ?)""",
                 (book.isbn, "withdrawn", 0, int(time.time()), book.user),

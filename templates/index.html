@@ -25,8 +25,8 @@
                         <p id="modal-position"></p>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary mr-auto" data-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" id="infoModal" onclick=function() {}; data-dismiss="modal">Withdraw</button>
+                        <button type="button" class="btn btn-se condary mr-aut o" data-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" id="infoModalWithdrawShelve" onclick=function() {}; data-dismiss="modal">Withdraw</button>
                     </div>
                 </div>
             </div>
@@ -43,21 +43,21 @@
                     </div>
                     <div class="modal-body">
                         <form action="/update" method="post">
-                            <input type="text" id="isbn" name="isbn" value="{{ book.isbn }}" hidden>
+                            <input type="text" id="isbn" name="isbn" value="{{ select_book.isbn }}" hidden>
                             <p>
-                                Title: <input type="text" id="title" name="title" value="{{ book.title }}">
+                                Title: <input type="text" id="title" name="title" value="{{ select_book.title }}">
                             </p>
                             <p>
-                                Subtitle: <input type="text" id="subtitle" name="subtitle" value="{{ book.subtitle }}">
+                                Subtitle: <input type="text" id="subtitle" name="subtitle" value="{{ select_book.subtitle }}">
                             </p>
                             <p>
-                                Author: <input type="text" id="author" name="author" value="{{ book.author }}">
+                                Author: <input type="text" id="author" name="author" value="{{ select_book.author }}">
                             </p>
                             <p>
-                                Pages: <input type="number" id="pages" name="pages" onchange="calcWidth()" value="{{ book.pages }}">
+                                Pages: <input type="number" id="pages" name="pages" onchange="calcWidth()" value="{{ select_book.pages }}">
                             </p>
                             <p>
-                                Width: <input type="number" id="width" name="width" value="{{ book.width}}">mm
+                                Width: <input type="number" id="width" name="width" value="{{ select_book.width}}">mm
                             </p>
                             <p>
                                 Room: <select id="room" name="room">
@@ -66,10 +66,10 @@
                                     {% endfor %}
                                 </select>
                             </p>
-                            <input type="number" id="shelf" name="shelf" value="{{ book.shelf }}" hidden>
-                            <input type="number" id="position" name="position" value="{{ book.position }}" hidden>
-                            <input type="number" id="withdrawn" name="withdrawn" value="{{ book.withdrawn }}" hidden>
-                            <input class="button-3" role="button" type="submit" value="{% if book.shelf == -2 %}Shelve{% else %}Submit{% endif %}">
+                            <input type="number" id="shelf" name="shelf" value="{{ select_book.shelf }}" hidden>
+                            <input type="number" id="position" name="position" value="{{ select_book.position }}" hidden>
+                            <input type="number" id="withdrawn" name="withdrawn" value="{{ select_book.withdrawn }}" hidden>
+                            <input class="button-3" role="button" type="submit" value="{% if select_book.shelf == -2 %}Shelve{% else %}Submit{% endif %}">
                         </form>
                         <p id="modal-last-borrowed"></p>
                         <p id="modal-position"></p>
@@ -86,7 +86,7 @@
         <table id="books">
             <tbody id="booksBody">
                 {% for book in books %}
-                    <tr onclick='updateModal({{ book["json"] | tojson() }})'>
+                    <tr onclick='updateModal({{ book["json"] | tojson() }})' id="{{ book.isbn }}-tr">
                         <td>{{ book.title }}</td>
                         <td>{{ book.author }}</td>
                         <td id="{{ book.isbn }}-withdrawn">{{ book.withdrawn }}</td>
@@ -100,51 +100,60 @@
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
         <script>
             function updateModal(book) {
-                console.log(book)
-                document.getElementById("infoModalLabel").textContent=book['title'];
-                if (book['withdrawn'] == "") {
-                    document.getElementById("modal-last-borrowed").textContent="Book never borrowed.";
+                console.log(book);
+                document.getElementById("infoModalLabel").textContent = book["title"];
+                if (book["withdrawn"] == "") {
+                    document.getElementById("modal-last-borrowed").textContent =
+                        "Book never borrowed.";
                 } else {
-                    var withdrawn = "Last borrowed " + book['withdrawn'] + "."
-                    document.getElementById("modal-last-borrowed").textContent=withdrawn;
+                    var withdrawn = "Last borrowed " + book["withdrawn"] + ".";
+                    document.getElementById("modal-last-borrowed").textContent = withdrawn;
                 }
-                if (book['shelf'] != -1) {
+                if (book["position"] != -1) {
                     if (book["natlang_position"] == "") {
-                        var position = "Shelved on shelf " + book['shelf_name'] + " at position " + book['position'] + '.';
+                        var position =
+                            "Shelved on shelf " +
+                        book["shelf_name"] +
+                        " at position " +
+                        book["position"] +
+                        ".";
                     } else {
-                        var position = "Shelved on shelf " + book['shelf_name'] + " about " + book['natlang_position'] + " in from the left."
+                        var position =
+                            "Shelved on shelf " +
+                        book["shelf_name"] +
+                        " about " +
+                        book["natlang_position"] +
+                        " in from the left.";
                     }
-                    document.getElementById("modal-position").textContent=position
+                    document.getElementById("modal-position").textContent = position;
                 }
 
-                if (book.withdrawn == "") {
-                    document.getElementById("infoModal").onclick = async() => {
-                        const response = await fetch('/withdraw', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({'isbn': book['isbn'], 'user_name': "{{ user }}"}),
+                if (book.position != -1) {
+                    document.getElementById("infoModalWithdrawShelve").onclick = async () => {
+                        const response = await fetch("/withdraw", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ isbn: book["isbn"], user_name: "{{ user }}" }),
                         });
 
-                        withdrawn_text = await response.json();
-                        document.getElementById(book['isbn'] + '-withdrawn').textContent = withdrawn_text;
+                        await response.json();
+                        document.reload();
                     };
                 } else {
-                    document.getElementById("infoModal").textContent="Shelve";
+                    document.getElementById("infoModalWithdrawShelve").textContent = "Shelve";
+                    document.getElementById("infoModalWithdrawShelve").onClick = async () => {
+                        const response = await fetch("/shelve". {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ isbn: book["isbn"] }),
+                        });
+
+                        await response.json();
+                        document.reload();
                 }
 
-                $("#infoModal").modal('show');
-            };
-
-            console.log({{select_book["json"] | tojson() }});
-            {% if select_book != "" %}
-                updateModal({{ select_book["json"] | tojson() }});
-            {% endif %}
-
-            let socket = new WebSocket("{{ ws_address }}");
-            while (!socket.readyState === WebSocket.OPEN) {
-
+                $("#infoModal").modal("show");
             }
-
             socket.onmessage = function(event) {
                 const tab = document.getElementById("booksBody");
                 const newchildren = [];
@@ -171,6 +180,12 @@
                 const input = document.getElementById("search");
                 socket.send(input.value);
             }
+
+            let socket = new WebSocket("{{ ws_address }}");
+            while (!socket.readyState === WebSocket.OPEN) {
+
+            }
+
         </script>
     </body>
 </html>
