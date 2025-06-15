@@ -37,6 +37,7 @@ mm_per_page = 0.0696729243
 persist_dir = "storage"
 
 default_user_name = "foo"
+ws_proto = "ws"
 
 class CouldNotShelveError(Exception):
     pass
@@ -439,7 +440,7 @@ def get_library(request: Request, isbn: Optional[str] = ""):
     else:
         book = Book(isbn="", title="", subtitle="", author="", pages=0, width=0, room="", shelf="", position=0, withdrawn="")
 
-    ws_address = f"wss://{str(request.url).split('/')[2]}/search"
+    ws_address = f"{ws_proto}://{str(request.url).split('/')[2]}/search"
 
     return templates.TemplateResponse(
         request=request, 
@@ -451,9 +452,12 @@ class WithdrawRequest(BaseModel):
     isbn: str
     user_name: str
 
+class ShelveRequest(BaseModel):
+    isbn: str
+    shelf: str
+
 @app.post("/withdraw")
 def withdraw(req: WithdrawRequest):
-    print(req.isbn)
     book = format_db_record_as_book(
         db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (req.isbn,))
     )
@@ -479,6 +483,37 @@ def withdraw(req: WithdrawRequest):
 
     return JSONResponse(content=jsonable_encoder(book.withdrawn))
     
+@app.post("/shelve")
+async def shelve(req: ShelveRequest, request: Request):
+    book = format_db_record_as_book(
+        db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (req.isbn,))
+    )
+
+    rooms = get_rooms()
+    ws_address = f"{ws_proto}://{str(request.url).split('/')[2]}/shelve"
+    book.withdrawn = ""
+    
+    if book.room != "":
+        req_room = book.room
+    else:
+        first_room = next(iter(rooms))  # gets the first room
+        req_room = first_room
+
+    suggest_vals = suggest_position(book, rooms[req_room])
+    book_data = suggest_vals[0]
+    neighbour = suggest_vals[1]
+    room_list = [rooms[key] for key in rooms.keys()]
+
+    context={
+        "book": book_data,
+        "neighbour": neighbour,
+        "ws_address": ws_address,
+        "rooms": room_list,
+        "shelves": len(rooms[req_room].shelves),
+        "time": time.time(),
+    }
+
+    return JSONResponse(content=jsonable_encoder(context))
 
 @app.get("/{isbn}", response_class=HTMLResponse)
 def hit_endpoint(request: Request, isbn: str):
@@ -553,39 +588,6 @@ def update_book(book: Book):
     if book.time != "0":
         print(book.withdrawn)
         return book.withdrawn
-
-
-@app.get("/shelve/{isbn}", response_class=HTMLResponse)
-async def shelve(isbn: str, request: Request):
-    book = format_db_record_as_book(
-        db_fetchone("""SELECT * FROM books WHERE isbn = ? """, (isbn,))
-    )
-
-    rooms = get_rooms()
-    ws_address = f"wss://{str(request.url).split('/')[2]}/shelve"
-    book.withdrawn = ""
-
-    first_room = next(iter(rooms))  # gets the first room
-    suggest_vals = suggest_position(book, rooms[first_room])
-    book_data = suggest_vals[0]
-    neighbour = suggest_vals[1]
-    room_list = [rooms[key] for key in rooms.keys()]
-
-    return templates.TemplateResponse(
-        request=request,
-        name="shelve.html",
-        context={
-            "book": book_data,
-            "neighbour": neighbour,
-            "ws_address": ws_address,
-            "rooms": room_list,
-            "shelves": range(len(rooms[first_room].shelves)),
-            "time": time.time(),
-        },
-    )
-
-
-    
 
 
 @app.get("/locate/{isbn}", response_class=HTMLResponse)
