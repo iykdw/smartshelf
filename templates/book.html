@@ -1,21 +1,21 @@
 <html>
-<head>
-    <title>{{ book.title }}</title>
-    <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', path='/buttons.css') }}" rel="stylesheet">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" >
-</head>
-<body>
-    <h1>{{ book.title }}</h1>
-    <h2>by {{book.author}}
-    <br />
-    {% if book.shelf != -1 %}
-    <a href="/locate/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:50px;">Locate</button></a>
-    <a href="/withdraw/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:10px;">Withdraw</button></a>
-    {% endif %}
-    {% if book.shelf == -1 %}
-    <a href="/shelve/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:10px;">Shelve</button></a>
-    {% endif %}
-    <a href="/edit/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:10px;">Edit</button></a>
-</body>
-</html>
+    <head>
+        <title>{{ book.title }}</title>
+        <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
+        <link href="{{ url_for('static', path='/buttons.css') }}" rel="stylesheet">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+    </head>
+    <body>
+        <h1>{{ book.title }}</h1>
+        <h2>by {{book.author}}
+            <br />
+            {% if book.shelf != -1 %}
+                <a href="/locate/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:50px;">Locate</button></a>
+                <a href="/withdraw/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:10px;">Withdraw</button></a>
+            {% endif %}
+            {% if book.shelf == -1 %}
+                <a href="/shelve/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:10px;">Shelve</button></a>
+            {% endif %}
+            <a href="/edit/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:10px;">Edit</button></a>
+        </body>
+    </html>

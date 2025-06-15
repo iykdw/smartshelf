@@ -11,11 +11,11 @@
         <title>Hello, world!</title>
     </head>
     <body>
-        <div class="modal fade" id="infoModal" tabindex="-1" role="dialog" aria-labelledby="infoModalLabel" aria-hidden="true">
+        <div class="modal fade" id="info-modal" tabindex="-1" role="dialog" aria-labelledby="infoModalLabel" aria-hidden="true">
             <div class="modal-dialog" role="document">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="infoModalLabel"></h5>
+                        <h5 class="modal-title" id="info-modal-label"></h5>
                         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                             <span aria-hidden="true">&times;</span>
                         </button>
@@ -26,67 +26,65 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-se condary mr-aut o" data-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" id="infoModalWithdrawShelve" onclick=function() {}; data-dismiss="modal">Withdraw</button>
+                        <button type="button" class="btn btn-primary" id="info-modal-withdraw-shelve-btn" onclick=function() {}; data-dismiss="modal">Withdraw</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
+        <div class="modal fade" id="update-modal" tabindex="-1" role="dialog" aria-labelledby="update-modal-label" aria-hidden="true">
             <div class="modal-dialog" role="document">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="editModalLabel"></h5>
+                        <h5 class="modal-title" id="update-modal-label"></h5>
                         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                             <span aria-hidden="true">&times;</span>
                         </button>
                     </div>
                     <div class="modal-body">
                         <form action="/update" method="post">
-                            <input type="text" id="isbn" name="isbn" value="{{ select_book.isbn }}" hidden>
-                            <p>
-                                Title: <input type="text" id="title" name="title" value="{{ select_book.title }}">
-                            </p>
-                            <p>
-                                Subtitle: <input type="text" id="subtitle" name="subtitle" value="{{ select_book.subtitle }}">
-                            </p>
-                            <p>
-                                Author: <input type="text" id="author" name="author" value="{{ select_book.author }}">
-                            </p>
-                            <p>
-                                Pages: <input type="number" id="pages" name="pages" onchange="calcWidth()" value="{{ select_book.pages }}">
-                            </p>
-                            <p>
-                                Width: <input type="number" id="width" name="width" value="{{ select_book.width}}">mm
-                            </p>
-                            <p>
-                                Room: <select id="room" name="room">
-                                    {% for room in rooms%}
-                                        <option value="{{room}}">{{room}}</option>
-                                    {% endfor %}
-                                </select>
-                            </p>
-                            <input type="number" id="shelf" name="shelf" value="{{ select_book.shelf }}" hidden>
-                            <input type="number" id="position" name="position" value="{{ select_book.position }}" hidden>
-                            <input type="number" id="withdrawn" name="withdrawn" value="{{ select_book.withdrawn }}" hidden>
-                            <input class="button-3" role="button" type="submit" value="{% if select_book.shelf == -2 %}Shelve{% else %}Submit{% endif %}">
+                            <input type="text" id="update-isbn" name="isbn" value="{{ select_book.isbn }}" hidden>
+                            <input type="text" id="update-title" name="title" value="{{ select_book.title }}" hidden>
+                            <input type="text" id="update-subtitle" name="subtitle" value="{{ select_book.subtitle }}" hidden>
+                            <input type="text" id="update-author" name="author" value="{{ select_book.author }}" hidden>
+                            <input type="number" id="update-pages" name="pages" value="{{ select_book.pages }}" hidden>
+                            <input type="number" id="update-width" name="width" value="{{ select_book.width}}" hidden>
+
+                            <select id="update-room" name="room" onchange="sendData()">
+                                {% for room in rooms %}
+                                    <option value="{{ room.value }}" {% if select_book.room == room.value %}selected{% endif %}>{{ room.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <br />
+
+                            <select style="margin-top: 15px;" id="update-shelf" name="shelf" onchange="sendData({{ select_book.isbn }})">
+                                {% for shelf in shelves %}
+                                    <option value="{{ shelf }}" {% if select_book.shelf == shelf %}selected{% endif %}>{{ shelf }}</option>
+                                {% endfor %}
+                            </select>
+                            <br />
+                            <input type="number" id="update-position" name="position" value="{{ select_book.position }}" hidden>
+                            <input type="text" id="update-withdrawn" name="withdrawn" value="shelved" hidden>
+                            <input type="text" id="update-time" name="time" value="{{ time }}" hidden>
+                            <input style="margin-top: 15px; "class="button-3" role="button" type="submit" value="Shelve">
                         </form>
-                        <p id="modal-last-borrowed"></p>
-                        <p id="modal-position"></p>
+                        <p>Shelve next to <span id="neighbour">{{ neighbour }}</span></p>
+
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary mr-auto" data-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" id="editModal" onclick=function() {}; data-dismiss="modal">Submit</button>
+                        <button type="button" class="btn btn-primary" id="update-modal" onclick=function() {}; data-dismiss="modal">Submit</button>
                     </div>
                 </div>
             </div>
         </div>
+
         <input id="search" type="text" onkeydown="sendValue()" autocomplete="off">
 
         <table id="books">
             <tbody id="booksBody">
                 {% for book in books %}
-                    <tr onclick='updateModal({{ book["json"] | tojson() }})' id="{{ book.isbn }}-tr">
+                    <tr onclick='updateInfoModal({{ book["json"] | tojson() }})' id="{{ book.isbn }}-tr">
                         <td>{{ book.title }}</td>
                         <td>{{ book.author }}</td>
                         <td id="{{ book.isbn }}-withdrawn">{{ book.withdrawn }}</td>
@@ -99,9 +97,9 @@
         <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
         <script>
-            function updateModal(book) {
+            function updateInfoModal(book) {
                 console.log(book);
-                document.getElementById("infoModalLabel").textContent = book["title"];
+                document.getElementById("info-modal-label").textContent = book["title"];
                 if (book["withdrawn"] == "") {
                     document.getElementById("modal-last-borrowed").textContent =
                         "Book never borrowed.";
@@ -128,8 +126,8 @@
                     document.getElementById("modal-position").textContent = position;
                 }
 
-                if (book.position != -1) {
-                    document.getElementById("infoModalWithdrawShelve").onclick = async () => {
+                if (book.withdrawn == "") {
+                    document.getElementById("info-modal-withdraw-shelve-btn").onclick = async () => {
                         const response = await fetch("/withdraw", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
@@ -140,19 +138,55 @@
                         document.reload();
                     };
                 } else {
-                    document.getElementById("infoModalWithdrawShelve").textContent = "Shelve";
-                    document.getElementById("infoModalWithdrawShelve").onClick = async () => {
-                        const response = await fetch("/shelve". {
+                    document.getElementById("info-modal-withdraw-shelve-btn").textContent = "Shelve";
+                    document.getElementById("info-modal-withdraw-shelve-btn").onClick = async () => {
+                        const response = await fetch("/shelve", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ isbn: book["isbn"] }),
                         });
 
                         await response.json();
-                        document.reload();
+                        $("#update-title").setAttribute("hidden");
+                        $("#update-subtitle").setAttribute("hidden");
+                        $("#update-author").setAttribute("hidden");
+                        $("#update-pages").setAttribute("hidden");
+                        $("#update-isbn").setAttribute("hidden");
+                        $("#update-room").removeAttribute("hidden");
+                        $("#update-shelf").removeAttribute("hidden");
+                        $("#update-position").setAttribute("hidden");
+                        const shelve_socket = new WebSocket("{{ ws_address }}");
+                        $("#update-shelf").onchange = sendData(book.isbn);
+                        $("#update-modal").modal("show");
+                    };
                 }
+                $("#info-modal").modal("show");
+            }
 
-                $("#infoModal").modal("show");
+            function shelveOptions() {
+
+                shelve_socket.onmessage = function(event) {
+                    const shelves = document.getElementById("update-shelf");
+                    const newchildren = [];
+                    let data = JSON.parse(event.data);
+                    data["shelves"].forEach(function(shelf) {
+                        const option = document.createElement("option");
+                        option.value = shelf
+                        option.text = shelf
+                        if (shelf == data["shelf"]) {
+                            option.selected = true;
+                        }
+                        newchildren.push(option);
+                    });
+                    console.log(newchildren)
+                    shelves.replaceChildren(...newchildren);
+                    document.getElementById("update-neighbour").innerText = data.neighbour;
+                };
+            };
+            function sendData(isbn) {
+                const room = document.getElementById("room");
+                const shelves = document.getElementById("shelf");
+                socket.send(JSON.stringify({"room": room.value, "shelf": shelves.value, "isbn": isbn}));
             }
             socket.onmessage = function(event) {
                 const tab = document.getElementById("booksBody");
@@ -178,11 +212,11 @@
 
             function sendValue() {
                 const input = document.getElementById("search");
-                socket.send(input.value);
+                search_socket.send(input.value);
             }
 
-            let socket = new WebSocket("{{ ws_address }}");
-            while (!socket.readyState === WebSocket.OPEN) {
+            let search_socket = new WebSocket("{{ ws_address }}");
+            while (!search_socket.readyState === WebSocket.OPEN) {
 
             }
 

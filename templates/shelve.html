@@ -1,66 +1,66 @@
 <html>
-<head>
-    <title>Shelve {{ book.title }}</title>
-    <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', path='/buttons.css') }}" rel="stylesheet">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" >
-</head>
-<body>
-    <h1> Shelve {{ book.title }}</h1>
-    <br />
-    <form action="/update" method="post">
-        <input type="text" id="isbn" name="isbn" value="{{ book.isbn }}" hidden>
-        <input type="text" id="title" name="title" value="{{ book.title }}" hidden>
-        <input type="text" id="subtitle" name="subtitle" value="{{ book.subtitle }}" hidden>
-        <input type="text" id="author" name="author" value="{{ book.author }}" hidden>
-        <input type="number" id="pages" name="pages" value="{{ book.pages }}" hidden>
-        <input type="number" id="width" name="width" value="{{ book.width}}" hidden>
-
-        <select id="room" name="room" onchange="sendData()">
-            {% for room in rooms %}
-            <option value="{{ room.value }}" {% if book.room == room.value %}selected{% endif %}>{{ room.name }}</option>
-            {% endfor %}
-        </select>
+    <head>
+        <title>Shelve {{ book.title }}</title>
+        <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
+        <link href="{{ url_for('static', path='/buttons.css') }}" rel="stylesheet">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+    </head>
+    <body>
+        <h1> Shelve {{ book.title }}</h1>
         <br />
+        <form action="/update" method="post">
+            <input type="text" id="isbn" name="isbn" value="{{ book.isbn }}" hidden>
+            <input type="text" id="title" name="title" value="{{ book.title }}" hidden>
+            <input type="text" id="subtitle" name="subtitle" value="{{ book.subtitle }}" hidden>
+            <input type="text" id="author" name="author" value="{{ book.author }}" hidden>
+            <input type="number" id="pages" name="pages" value="{{ book.pages }}" hidden>
+            <input type="number" id="width" name="width" value="{{ book.width}}" hidden>
 
-        <select style="margin-top: 15px;" id="shelf" name="shelf" onchange="sendData()">
-            {% for shelf in shelves %}
-            <option value="{{ shelf }}" {% if book.shelf == shelf %}selected{% endif %}>{{ shelf }}</option>
-            {% endfor %}
-        </select>
-        <br />
-        <input type="number" id="position" name="position" value="{{ book.position }}" hidden>
-        <input type="text" id="withdrawn" name="withdrawn" value="shelved" hidden>
-        <input type="text" id="time" name="time" value="{{ time }}" hidden>
-        <input style="margin-top: 15px; "class="button-3" role="button" type="submit" value="Shelve">
-    </form>
-    <p>Shelve next to <span id="neighbour">{{ neighbour }}</span></p>
+            <select id="room" name="room" onchange="sendData()">
+                {% for room in rooms %}
+                    <option value="{{ room.value }}" {% if book.room == room.value %}selected{% endif %}>{{ room.name }}</option>
+                {% endfor %}
+            </select>
+            <br />
 
-    <script>
-        const socket = new WebSocket("{{ ws_address }}");
+            <select style="margin-top: 15px;" id="shelf" name="shelf" onchange="sendData()">
+                {% for shelf in shelves %}
+                    <option value="{{ shelf }}" {% if book.shelf == shelf %}selected{% endif %}>{{ shelf }}</option>
+                {% endfor %}
+            </select>
+            <br />
+            <input type="number" id="position" name="position" value="{{ book.position }}" hidden>
+            <input type="text" id="withdrawn" name="withdrawn" value="shelved" hidden>
+            <input type="text" id="time" name="time" value="{{ time }}" hidden>
+            <input style="margin-top: 15px; "class="button-3" role="button" type="submit" value="Shelve">
+        </form>
+        <p>Shelve next to <span id="neighbour">{{ neighbour }}</span></p>
 
-        socket.onmessage = function(event) {
-            const shelves = document.getElementById("shelf");
-            const newchildren = [];
-            let data = JSON.parse(event.data);
-            data["shelves"].forEach(function(shelf) {
-                const option = document.createElement("option");
-                option.value = shelf
-                option.text = shelf
-                if (shelf == data["shelf"]) {
-                    option.selected = true;
-                }
-                newchildren.push(option);
-            });
-            console.log(newchildren)
-            shelves.replaceChildren(...newchildren);
-            document.getElementById("neighbour").innerText = data.neighbour;
-        };
-        function sendData() {
-            const room = document.getElementById("room");
-            const shelves = document.getElementById("shelf");
-            socket.send(JSON.stringify({"room": room.value, "shelf": shelves.value, "isbn": "{{ book.isbn }}"}));
-        }
-    </script>
-</body>
+        <script>
+            const socket = new WebSocket("{{ ws_address }}");
+
+            socket.onmessage = function(event) {
+                const shelves = document.getElementById("shelf");
+                const newchildren = [];
+                let data = JSON.parse(event.data);
+                data["shelves"].forEach(function(shelf) {
+                    const option = document.createElement("option");
+                    option.value = shelf
+                    option.text = shelf
+                    if (shelf == data["shelf"]) {
+                        option.selected = true;
+                    }
+                    newchildren.push(option);
+                });
+                console.log(newchildren)
+                shelves.replaceChildren(...newchildren);
+                document.getElementById("neighbour").innerText = data.neighbour;
+            };
+            function sendData() {
+                const room = document.getElementById("room");
+                const shelves = document.getElementById("shelf");
+                socket.send(JSON.stringify({"room": room.value, "shelf": shelves.value, "isbn": "{{ book.isbn }}"}));
+            }
+        </script>
+    </body>
 </html>

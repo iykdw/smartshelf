@@ -19,7 +19,7 @@
             <input type="number" id="position" name="position" value="{{ book.position }}" hidden>
             <select id="user" name="user">
                 {% for user in users%}
-                <option value="{{ user[0] }}">{{user[0]}}</option>
+                    <option value="{{ user[0] }}">{{user[0]}}</option>
                 {% endfor %}
             </select>
             <input type="text" id="time" name="time" value="{{ time }}" hidden>
