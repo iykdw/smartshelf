@@ -1,0 +1,38 @@
+<html>
+    <head>
+        <title>Add {{loctype}}</title>
+        <link href="{{ url_for('static', path='/bmfw.css') }}" rel="stylesheet">
+        <link href="{{ url_for('static', path='/buttons.css') }}" rel="stylesheet">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+        <script>
+        console.log("{{shelves}}");
+        </script>
+    </head>
+    <body>
+        <h1>Add {{loctype}}</h1>
+        <form action="/{{ loctype }}add" method="post">
+            <input type="text" id="uuid" name="uuid" value="" hidden>
+            <p>Name:  <input type="text" id="name" name="name" value=""><p>
+            <p {% if loctype == "room" %}hidden{% endif %}>Width: <input type="text" id="width" name="width" value="" ></p>
+            <p {% if loctype == "room" %}hidden{% endif %}>In room: <select id="room" name="room"></p>
+                {% for room in rooms %}
+                <option value="{{ room.uuid }}">{{ room.name }}</option>
+                {% endfor %}
+                </select>
+            </p>
+            <input class="button-3" role="button" type="submit" value="Add {{ loctype }}">
+            <p {% if loctype != "room" %}hidden{% endif %}> Existing rooms are:</p>
+            <ul {% if loctype != "room" %}hidden{% endif %}>
+                {% for room in rooms %}
+                <li>{{ room.name }}</li>
+                {% endfor %}
+            </ul>
+            <p {% if loctype != "shelf" %}hidden{% endif %}> Existing shelves are:</p>
+            <ul {% if loctype != "shelf" %}hidden{% endif %}>
+                {% for shelf in shelves %}
+                <li>{{ shelf.name }}</li>
+                {% endfor %}
+            </ul>
+        </form>
+    </body>
+</html>
