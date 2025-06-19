@@ -28,32 +28,28 @@
                 "width": 360
             },
             {
-                "name": "Over TV 1",
-                "width": 1000
-            },
-            {
                 "name": "TV Right 1",
-                "width": 900
+                "width": 450
             },
             {
                 "name": "TV Right 2",
-                "width": 900
+                "width": 450
             },
             {
                 "name": "TV Right 3",
-                "width": 900
+                "width": 450
             },
             {
                 "name": "TV Right 4",
-                "width": 900
+                "width": 450
             },
             {
                 "name": "TV Right 5",
-                "width": 900
+                "width": 450
             },
             {
                 "name": "TV Right 6",
-                "width": 900
+                "width": 450
             }
         ]
     }
