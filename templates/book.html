@@ -9,11 +9,11 @@
     <h1>{{ book.title }}</h1>
     <h2>by {{book.author}}
     <br />
-    {% if book.shelf != -1 %}
+    {% if book.shelf != "" %}
     <a href="/locate/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:50px;">Locate</button></a>
     <a href="/withdraw/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:10px;">Withdraw</button></a>
     {% endif %}
-    {% if book.shelf == -1 %}
+    {% if book.shelf == "" %}
     <a href="/shelve/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:10px;">Shelve</button></a>
     {% endif %}
     <a href="/edit/{{ book.isbn }}"><button class="button-3" style="width: 100%;margin-top:10px;">Edit</button></a>
