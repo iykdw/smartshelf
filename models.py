@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from pydantic import Field
 
 class Book(BaseModel):
+    uuid: str
     isbn: str 
     title: str
     subtitle: str
@@ -30,3 +31,4 @@ class Shelf(BaseModel):
 class Room(BaseModel):
     uuid: str
     name: str
+    shelves: dict[str, Shelf]

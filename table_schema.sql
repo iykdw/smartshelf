@@ -1,5 +1,6 @@
 CREATE TABLE books (
-                isbn TEXT UNIQUE,
+                uuid TEXT UNIQUE,
+                isbn TEXT,
                 title TEXT,
                 subtitle TEXT,
                 author TEXT,
@@ -25,5 +26,5 @@ CREATE TABLE shelves (
         name TEXT,
         width INT,
         room TEXT,
-        xloc INT,
-        yloc INT) STRICT;
+        xloc INTEGER,
+        yloc INTEGER) STRICT;
