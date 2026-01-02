@@ -4,11 +4,15 @@
     <link href="{{ url_for('static', path='/bmfw.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', path='/buttons.css') }}" rel="stylesheet">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+    <script>
+        console.log({{shelves[0]}});
+    </script>
 </head>
 <body>
     <h1> Shelve {{ book.title }}</h1>
     <br />
     <form action="/update" method="post">
+        <input type="text" id="uuid" name="uuid" value="{{ book.uuid }}" hidden>
         <input type="text" id="isbn" name="isbn" value="{{ book.isbn }}" hidden>
         <input type="text" id="title" name="title" value="{{ book.title }}" hidden>
         <input type="text" id="subtitle" name="subtitle" value="{{ book.subtitle }}" hidden>
@@ -18,14 +22,17 @@
 
         <select id="room" name="room" onchange="sendData()">
             {% for room in rooms %}
-            <option value="{{ room.value }}" {% if book.room == room.value %}selected{% endif %}>{{ room.name }}</option>
+            <option value="{{ room[0] }}" {% if book.room == room[0] %}selected{% endif %}>{{ room[1] }}</option>
+            <script>
+                console.log(room[0], room[1]);
+            </script>
             {% endfor %}
         </select>
         <br />
 
         <select style="margin-top: 15px;" id="shelf" name="shelf" onchange="sendData()">
             {% for shelf in shelves %}
-            <option value="{{ shelf }}" {% if book.shelf == shelf %}selected{% endif %}>{{ shelf }}</option>
+            <option value="{{ shelf.uuid }}" {% if book.shelf == shelf.uuid %}selected{% endif %}>{{ shelf.name }}</option>
             {% endfor %}
         </select>
         <br />
@@ -34,7 +41,7 @@
         <input type="text" id="time" name="time" value="{{ time }}" hidden>
         <input style="margin-top: 15px; "class="button-3" role="button" type="submit" value="Shelve">
     </form>
-    <p>Shelve next to <span id="neighbour">{{ neighbour }}</span></p>
+    <p>Shelve next to <span id="neighbour">{{ neighbour }}</span>, <span id="natlangpos">{{ book.natlangpos }}.</p>
 
     <script>
         const socket = new WebSocket("{{ ws_address }}");
@@ -55,6 +62,7 @@
             console.log(newchildren)
             shelves.replaceChildren(...newchildren);
             document.getElementById("neighbour").innerText = data.neighbour;
+            document.getElementById("natlangpos").innerText = data.natlangpos;
         };
         function sendData() {
             const room = document.getElementById("room");

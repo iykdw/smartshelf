@@ -11,7 +11,7 @@
     <table id="books">
         <tbody id="booksBody">
         {% for book in books %}
-        <tr onclick="window.location='/book/{{ book.isbn }}'">
+        <tr onclick="window.location='/book/{{ book.uuid }}'">
             <td>{{ book.title }}</td>
             <td>{{ book.author }}</td>
             <td>{{ book.withdrawn }}</td>
@@ -28,6 +28,7 @@
             const tab = document.getElementById("booksBody");
             const newchildren = [];
             JSON.parse(event.data).forEach(function(book) {
+                console.log(book);
                 const tr = document.createElement("tr");
                 tr.onclick = function() {
                     window.location = '/book/' + book[0];
