@@ -371,7 +371,7 @@ def get_library(request: Request):
     for book_data in books_raw:
         books.append(format_db_record_as_book(book_data))
 
-    ws_address = f"ws://{str(request.url).split('/')[2]}/search"
+    ws_address = f"wss://{str(request.url).split('/')[2]}/search"
 
     return templates.TemplateResponse(
         request=request,
@@ -466,7 +466,7 @@ async def shelve(uuid: str, request: Request):
     )
 
     rooms = get_rooms()
-    ws_address = f"ws://{str(request.url).split('/')[2]}/shelve"
+    ws_address = f"wss://{str(request.url).split('/')[2]}/shelve"
     book.withdrawn = ""
 
     first_room = next(iter(rooms))  # gets the first room
