@@ -1,55 +1,47 @@
 [
     {
-        "value": "main",
-        "name": "Main Room",
+        "value": "living",
+        "name": "Living Room",
         "shelves": [
             {
-                "name": "TV Left 1",
-                "width": 360
+                "name": "Shelf One Left",
+                "width": 1363
             },
             {
-                "name": "TV Left 2",
-                "width": 360
+                "name": "Shelf One Right",
+                "width": 1363
             },
             {
-                "name": "TV Left 3",
-                "width": 360
+                "name": "Shelf Two Left",
+                "width": 1363
             },
             {
-                "name": "TV Left 4",
-                "width": 360
+                "name": "Shelf Two Right",
+                "width": 1363
             },
             {
-                "name": "TV Left 5",
-                "width": 360
+                "name": "Shelf Three Left",
+                "width": 1363
             },
             {
-                "name": "TV Left 6",
-                "width": 360
+                "name": "Shelf Three Right",
+                "width": 1363
             },
             {
-                "name": "TV Right 1",
-                "width": 450
+                "name": "Shelf Four Left",
+                "width": 1363
             },
             {
-                "name": "TV Right 2",
-                "width": 450
+                "name": "Shelf Four Right",
+                "width": 1363
             },
             {
-                "name": "TV Right 3",
-                "width": 450
+                "name": "Shelf Five Left",
+                "width": 1363
             },
             {
-                "name": "TV Right 4",
-                "width": 450
-            },
-            {
-                "name": "TV Right 5",
-                "width": 450
-            },
-            {
-                "name": "TV Right 6",
-                "width": 450
+                "name": "Shelf Five Right",
+                "width": 1363
             }
         ]
     }
