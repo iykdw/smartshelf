@@ -10,7 +10,7 @@ class DB:
         self.file = file
 
     def log_trace(self, statement):
-        self.logging.info(statement)
+        self.logging.debug(statement)
 
     def _db_execute(self, command: str, args: tuple, com_type: int) -> List:
         with closing(sqlite3.connect(f"{self.persist}/{self.file}")) as connection:
