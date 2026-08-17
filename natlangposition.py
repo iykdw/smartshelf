@@ -1,7 +1,7 @@
 from bisect import bisect_left
 
 def nat_lang_position(val: int, maxval: int) -> str:
-    points = {0: "near the left-hand side",
+    points = {0.1: "near the left-hand side",
               0.2: "about a fifth in",
               0.25: "about a quarter in",
               0.33: "about a third in",
