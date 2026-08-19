@@ -1,4 +1,5 @@
 import copy
+import random
 import json
 import logging
 import os
@@ -420,9 +421,17 @@ def get_library(request: Request):
 @app.get("/populate/{isbn}")
 def add_book(isbn: str):
     book_data = get_data_from_gb(isbn)
-    if isinstance(book_data, HTTPError):
-        #TODO: Handle this properly
-        return 
+    while isinstance(book_data, HTTPError):
+        backoff = 1
+        if book_data.code == 503:
+            this_backoff = backoff + random.randint(1, 10)/10
+            logging.info(f"Server 503'd, sleeping for {this_backoff}s.")
+            this_backoff = backoff + random.randint(1, 10)/10
+            if backoff != 4:
+                backoff *= 2
+            book_data = get_data_from_gb(isbn)
+        else:
+            return
 
     DB.execute(
         """INSERT OR REPLACE INTO books VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
