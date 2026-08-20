@@ -1,35 +1,26 @@
 import copy
-import random
 import json
 import logging
 import os
 import pprint
+import random
 import sqlite3
 import sys
 import time
 from datetime import datetime
 from typing import Annotated
-from typing import List
-from typing import Tuple
 from urllib.error import HTTPError
 from urllib.request import urlopen
 from uuid import uuid4
 
-from fastapi import FastAPI
-from fastapi import Form
-from fastapi import Request
-from fastapi import status
-from fastapi import WebSocket
-from fastapi.responses import HTMLResponse
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, Form, Request, WebSocket, status
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import db_ops
 import smartshelf_keys
-from models import Book
-from models import Room
-from models import Shelf
+from models import Book, Room, Shelf
 from natlangposition import nat_lang_position
 from rooms_to_db import rooms_to_db
 
@@ -37,11 +28,14 @@ from rooms_to_db import rooms_to_db
 class CouldNotShelveError(Exception):
     pass
 
+
 class DatabaseNotFoundError(Exception):
     pass
 
+
 class UnconfiguredError(Exception):
     pass
+
 
 def has_config(DB):
     try:
@@ -55,6 +49,7 @@ def has_config(DB):
 
     return True
 
+
 def get_data_from_api(url):
     logging.info(f"Requesting data from URL {url}")
     try:
@@ -62,7 +57,7 @@ def get_data_from_api(url):
         logging.info("Response received!")
         return response
     except HTTPError as e:
-        logging.info(f"Error while requesting data:\n    Code: {e.code}\n    Reason: {e.reason}\n    Headers:\n{"\n    ".join(e.headers)}")
+        logging.info(f"Error while requesting data:\n    Code: {e.code}\n    Reason: {e.reason}\n    Headers:\n{'\n    '.join(e.headers)}")
         return e
         return {"code": e.code, "reason": e.reason, "headers": e.headers.split()}
 
@@ -112,15 +107,7 @@ def get_data_from_gb(isbn) -> Book:
         subtitle=book_data["subtitle"] if "subtitle" in book_data else "",
         author=", ".join(book_data["authors"]) if "authors" in book_data else "",
         pages=book_data["printedPageCount"] if "printedPageCount" in book_data else 0,
-        width=int(
-            (
-                int(book_data["printedPageCount"])
-
-                if "printedPageCount" in book_data
-                else 0
-            )
-            * mm_per_page
-        ),
+        width=int((int(book_data["printedPageCount"]) if "printedPageCount" in book_data else 0) * mm_per_page),
         room="",
         shelf="",
         position=-1,
@@ -132,9 +119,8 @@ def get_data_from_gb(isbn) -> Book:
 
     return book
 
-def suggest_position(
-        book: Book, room_shelves: dict[str, Shelf], DB: db_ops.DB, requested_shelf: str = ""
-) -> Tuple[Book, str]:
+
+def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops.DB, requested_shelf: str = "") -> tuple[Book, str]:
     shelves = []
 
     if requested_shelf != "":
@@ -146,124 +132,120 @@ def suggest_position(
         shelves = list(room_shelves.values())
 
     for shelf in shelves:
-        books_on_shelf: List[Tuple[str, int, int]] = DB.fetchall(
+        books_on_shelf: list[tuple[str, int, int]] = DB.fetchall(
             """SELECT title, width, position FROM books WHERE shelf = ? ORDER BY position""",
-            (
-                shelf.uuid,
-            ),
+            (shelf.uuid,),
         )
 
         neighbour = "shelf edge"
 
-        if books_on_shelf == []: #i.e. if shelf is completely empty
-            logging.info(f"    Book {book.title} can be shelved on {shelf.name} ({shelf.uuid}) at {int(book.width/2)} (shelf is empty)")
+        if books_on_shelf == []:  # i.e. if shelf is completely empty
+            logging.info(f"    Book {book.title} can be shelved on {shelf.name} ({shelf.uuid}) at {int(book.width / 2)} (shelf is empty)")
             book.shelf = shelf.uuid
-            book.position = int(book.width/2)
+            book.position = int(book.width / 2)
             book.natlangpos = "at the far left"
             book.shelf_name = shelf.name
             return (
                 book,
                 neighbour,
             )
-        else: #if shelf is not empty
-            empty: List[int] = list(range(shelf.width))
-            logging.debug(shelf)
-            logging.debug(
-                    f"Attempting to shelve {book.title} on shelf {shelf.uuid}"
+        # if shelf is not empty
+        empty: list[int] = list(range(shelf.width))
+        logging.debug(shelf)
+        logging.debug(f"Attempting to shelve {book.title} on shelf {shelf.uuid}")
+
+        for shelved_book in books_on_shelf:
+            hw = int(shelved_book[1] / 2)  # halved width
+            start = int(shelved_book[2] - hw)
+            end = int(shelved_book[2] + hw)
+            logging.debug(f"    {shelved_book[0]} in position {start}-{end}")
+
+            if start in empty:
+                curr = start  # remove the millimeters occupied by this book
+            else:
+                curr = start + 1
+
+            while curr <= end:
+                try:
+                    empty.remove(curr)
+                except ValueError:
+                    logging.debug("that fucking empty.remove(curr) bug, bestie, fix it")
+
+                curr += 1
+
+        # gaps will be stored as [start_index, end_index]
+        gaps = []
+
+        for j in range(len(empty) - 1):
+            # Iterate over all the millimetres not currently occupied by a book
+
+            if len(gaps) == 0 and empty[0] == 0:
+                # If there are no gaps known and the first gap is at the edge of the shelf, start a new gap at -1 because... offset reasons
+                gaps.append([-1])
+            elif len(gaps) == 0:
+                # If there are no gaps known, but the first gap starts inset from the edge of the shelf
+                gaps.append([empty[0]])
+
+            if len(gaps[-1]) == 2:
+                # If the current gap is complete, start a new gap
+                gaps.append([empty[j]])
+
+            if empty[j] != empty[j + 1] - 1:
+                # If the next empty millimetre is not the next millimetre, finish this gap.
+                gaps[-1].append(empty[j])
+
+        if len(gaps) == 0:
+            logging.info(f"    Shelf {shelf.name} ({shelf.uuid}) completely full; proceeding to next shelf")
+
+            continue
+
+        gaps[-1].append(empty[-1])
+        logging.debug(f"    Gaps found - {gaps}")
+
+        gaps = sorted(gaps, key=lambda x: x[1] - x[0], reverse=True)
+        # Find the largest gap
+        largest = gaps[0][1] - gaps[0][0]
+        logging.debug(
+            f"    The largest gap on shelf {shelf.name} ({shelf.uuid}) is {largest}mm. Book is {book.width}mm wide and would {'not ' if book.width > largest else ''}fit."
+        )
+
+        if (gaps[0][1] - gaps[0][0]) < book.width:
+            # if the biggest gap is too small, proceed to next shelf
+            logging.info(f"    Book {book.title} cannot be shelved on shelf {shelf.name} ({shelf.uuid})")
+            continue
+
+        suggested = gaps[0][0] + int(book.width / 2)
+        book.shelf = shelf.uuid
+        book.shelf_name = shelf.name
+        book.position = suggested
+        if gaps[0][0] == -1:
+            book.natlangpos = "at the far left"
+        else:
+            book.natlangpos = nat_lang_position(book.position, shelf.width)
+
+        logging.info(f"    Book {book.title} can be shelved on {shelf.name} ({shelf.uuid}) at {suggested}")
+
+        # When would gaps[0][1] ever be undefined?
+        if gaps[0][0] == -1 and gaps[0][1]:
+            return (
+                book,
+                neighbour,
             )
 
-            for shelved_book in books_on_shelf:
-                hw = int(shelved_book[1] / 2) # halved width
-                start = int(shelved_book[2] - hw)
-                end = int(shelved_book[2] + hw)
-                logging.debug(f"    {shelved_book[0]} in position {start}-{end}")
+        neighbour = books_on_shelf[0][0]
 
-                if start in empty:
-                    curr = start  # remove the millimeters occupied by this book
-                else:
-                    curr = start + 1
-
-                while curr <= end:
-                    try:
-                        empty.remove(curr)
-                    except ValueError:
-                        logging.debug("that fucking empty.remove(curr) bug, bestie, fix it")
-
-                    curr += 1
-
-            # gaps will be stored as [start_index, end_index]
-            gaps = []
-
-            for j in range(len(empty)-1):
-                # Iterate over all the millimetres not currently occupied by a book
-
-                if len(gaps) == 0 and empty[0] == 0:
-                    # If there are no gaps known and the first gap is at the edge of the shelf, start a new gap at -1 because... offset reasons
-                    gaps.append([-1])
-                elif len(gaps) == 0:
-                    # If there are no gaps known, but the first gap starts inset from the edge of the shelf
-                    gaps.append([empty[0]])
-
-                if len(gaps[-1]) == 2:
-                    # If the current gap is complete, start a new gap
-                    gaps.append([empty[j]])
-
-                if empty[j] != empty[j + 1] - 1:
-                    # If the next empty millimetre is not the next millimetre, finish this gap.
-                    gaps[-1].append(empty[j])
-
-            if len(gaps) == 0:
-                logging.info(f"    Shelf {shelf.name} ({shelf.uuid}) completely full; proceeding to next shelf")
-
-                continue
-
-            gaps[-1].append(empty[-1])
-            logging.debug(f"    Gaps found - {gaps}")
-
-            gaps = sorted(gaps, key=lambda x: x[1] - x[0], reverse=True)
-            # Find the largest gap
-            largest = gaps[0][1]-gaps[0][0]
-            logging.debug(f"    The largest gap on shelf {shelf.name} ({shelf.uuid}) is {largest}mm. Book is {book.width}mm wide and would {'not ' if book.width > largest else ''}fit.")
-
-            if (gaps[0][1] - gaps[0][0]) < book.width:
-                # if the biggest gap is too small, proceed to next shelf
-                logging.info(f"    Book {book.title} cannot be shelved on shelf {shelf.name} ({shelf.uuid})")
-                continue
-
-            suggested = gaps[0][0] + int(book.width / 2)
-            book.shelf = shelf.uuid
-            book.shelf_name = shelf.name
-            book.position = suggested
-            if gaps[0][0] == -1:
-                book.natlangpos = "at the far left"
-            else:
-                book.natlangpos = nat_lang_position(book.position, shelf.width)
-
-            logging.info(f"    Book {book.title} can be shelved on {shelf.name} ({shelf.uuid}) at {suggested}")
-
-            # When would gaps[0][1] ever be undefined?
-            if gaps[0][0] == -1 and gaps[0][1]:
+        for shelved in books_on_shelf:
+            if shelved[2] > book.position:  # Keep going until we overshoot, then return the last
                 return (
                     book,
                     neighbour,
                 )
+            neighbour = shelved[0]
 
-            else:
-                neighbour = books_on_shelf[0][0]
-
-                for shelved in books_on_shelf:
-                    if shelved[2] > book.position: # Keep going until we overshoot, then return the last
-                        return (
-                            book,
-                            neighbour,
-                        )
-                    neighbour = shelved[0]
-
-
-                return ( # The previous will fail if this book is the last book on the shelf! 
-                    book,
-                    neighbour,
-                )
+        return (  # The previous will fail if this book is the last book on the shelf!
+            book,
+            neighbour,
+        )
 
     raise CouldNotShelveError
 
@@ -280,7 +262,8 @@ def get_rooms() -> dict[str, Book]:
 
     return rooms
 
-def get_shelves(room: str = "") -> List[Shelf]:
+
+def get_shelves(room: str = "") -> list[Shelf]:
     shelves = []
     if room == "":
         shelf_data = DB.fetchall("""SELECT * FROM shelves""")
@@ -294,8 +277,8 @@ def get_shelves(room: str = "") -> List[Shelf]:
     return shelves
 
 
-def format_book_for_db_insertion(book: Book) -> Tuple[str | int]:
-    return_data =  (
+def format_book_for_db_insertion(book: Book) -> tuple[str | int]:
+    return_data = (
         book.uuid,
         book.isbn,
         book.title,
@@ -312,8 +295,8 @@ def format_book_for_db_insertion(book: Book) -> Tuple[str | int]:
     return return_data
 
 
-def format_db_record_as_book(record: Tuple[str | int]) -> Book:
-    return Book( 
+def format_db_record_as_book(record: tuple[str | int]) -> Book:
+    return Book(
         uuid=record[0],
         isbn=record[1],
         title=record[2],
@@ -327,10 +310,11 @@ def format_db_record_as_book(record: Tuple[str | int]) -> Book:
         withdrawn=record[10],
     )
 
+
 def _build_db(DB):
     os.system(f'uv run sqlite3 {persist_dir}/{db_file} ".read table_schema.sql"')
     if len(get_rooms().keys()) == 0:
-        rooms_to_db(DB, f"{persist_dir}/rooms.json") 
+        rooms_to_db(DB, f"{persist_dir}/rooms.json")
     return
     # Only if we want to populate the db
     with open(f"{persist_dir}/isbns.json") as f:
@@ -348,7 +332,8 @@ def _build_db(DB):
                     """INSERT OR REPLACE INTO books VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     format_book_for_db_insertion(book),
                 )
-                
+
+
 default_user = "yasha"
 persist_dir = "storage"
 db_file = "books.db"
@@ -359,16 +344,16 @@ mm_per_page = 0.0696729243
 if "pytest" in sys.modules:
     _test_env = True
     persist_dir = "storage/test"
-    db_file =  f"{datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d')}.db"
+    db_file = f"{datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d')}.db"
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d:%H:%M:%S",
     level=logging.INFO,
     handlers=[
-        logging. FileHandler(f"{persist_dir}/debug.log"),
+        logging.FileHandler(f"{persist_dir}/debug.log"),
         logging.StreamHandler(sys.stdout),
-    ], 
+    ],
 )
 
 logger = logging.getLogger(__name__)
@@ -393,10 +378,9 @@ else:
     raise DatabaseNotFoundError
 
 
-
 @app.get("/", response_class=HTMLResponse)
 def get_library(request: Request):
-    if request['type'] == "https":
+    if request["type"] == "https":
         ws_address = f"wss://{str(request.url).split('/')[2]}/search"
     else:
         ws_address = f"ws://{str(request.url).split('/')[2]}/search"
@@ -411,54 +395,51 @@ def get_library(request: Request):
     for book_data in books_raw:
         books.append(format_db_record_as_book(book_data))
 
-
     return templates.TemplateResponse(
         request=request,
         name="library.html",
         context={"books": books, "ws_address": ws_address},
     )
 
+
 @app.get("/populate/{isbn}")
 def add_book(isbn: str):
     book_data = get_data_from_gb(isbn)
+    backoff = 1
     while isinstance(book_data, HTTPError):
-        backoff = 1
         if book_data.code == 503:
-            this_backoff = backoff + random.randint(1, 10)/10
+            this_backoff = backoff + random.randint(1, 10) / 10
             logging.info(f"Server 503'd, sleeping for {this_backoff}s.")
-            this_backoff = backoff + random.randint(1, 10)/10
-            if backoff != 4:
-                backoff *= 2
+            this_backoff = backoff + random.randint(1, 10) / 10
+            if backoff < 4:
+                backoff = backoff * 2
             book_data = get_data_from_gb(isbn)
         else:
-            return
+            return None
 
     DB.execute(
         """INSERT OR REPLACE INTO books VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         format_book_for_db_insertion(book_data),
     )
-    
+
     uuid = book_data.uuid
     return RedirectResponse(url=f"/book/{uuid}", status_code=status.HTTP_303_SEE_OTHER)
-    
+
 
 @app.get("/book/{uuid}", response_class=HTMLResponse)
 def hit_endpoint(request: Request, uuid: str):
     book_data = DB.fetchone("""SELECT * FROM books WHERE uuid = ?""", (uuid,))
 
-    if not book_data: # If this book is being added
+    if not book_data:  # If this book is being added
         return RedirectResponse(url=f"/add/{uuid}", status_code=status.HTTP_302_FOUND)
 
     book = format_db_record_as_book(book_data)
-    return templates.TemplateResponse(
-        request=request, name="book.html", context={"book": book}
-    )
+    return templates.TemplateResponse(request=request, name="book.html", context={"book": book})
+
 
 @app.get("/edit/{uuid}", response_class=HTMLResponse)
 def edit_book(request: Request, uuid: str):
-    book_data = format_db_record_as_book(
-        DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (uuid,))
-    )
+    book_data = format_db_record_as_book(DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (uuid,)))
 
     return templates.TemplateResponse(
         request=request,
@@ -483,9 +464,7 @@ async def update_book(book: Annotated[Book, Form()]):
                 (book.isbn, "withdrawn", 0, time, book.user),
             )
 
-            book.withdrawn = (
-                f"{datetime.fromtimestamp(time).strftime('%Y-%m-%d')} by {book.user}"
-            )
+            book.withdrawn = f"{datetime.fromtimestamp(time).strftime('%Y-%m-%d')} by {book.user}"
 
         elif book.withdrawn == "shelved":
             DB.execute(
@@ -501,23 +480,19 @@ async def update_book(book: Annotated[Book, Form()]):
     )
 
     if book.shelf == -2:
-        return RedirectResponse(
-            url=f"/shelve/{book.isbn}", status_code=status.HTTP_303_SEE_OTHER
-        )
+        return RedirectResponse(url=f"/shelve/{book.isbn}", status_code=status.HTTP_303_SEE_OTHER)
 
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/shelve/{book_uuid}", response_class=HTMLResponse)
 async def shelve(book_uuid: str, request: Request):
-    if request['type'] == "https":
+    if request["type"] == "https":
         ws_address = f"wss://{str(request.url).split('/')[2]}/shelve"
     else:
         ws_address = f"ws://{str(request.url).split('/')[2]}/shelve"
 
-    book_data = format_db_record_as_book(
-        DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (book_uuid,))
-    )
+    book_data = format_db_record_as_book(DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (book_uuid,)))
 
     rooms = get_rooms()
     book_data.withdrawn = ""
@@ -547,48 +522,38 @@ async def shelve(book_uuid: str, request: Request):
             if room.uuid not in possible_rooms:
                 possible_rooms.append(room.uuid)
 
-        logging.info(f"    {book_data.title} can be shelved on {len(viable_shelves.keys())} out of a possible {len(room.shelves)} in {room.name}.")
+        logging.info(
+            f"    {book_data.title} can be shelved on {len(viable_shelves.keys())} out of a possible {len(room.shelves)} in {room.name}."
+        )
 
     shelves_list = []
     for shelf in room.shelves.values():
-        shelves_list.append(
-            {'name': shelf.name,
-             'uuid': shelf.uuid,
-             'disabled': False if shelf.uuid in viable_shelves.keys() else True}
-        )
+        shelves_list.append({"name": shelf.name, "uuid": shelf.uuid, "disabled": False if shelf.uuid in viable_shelves else True})
 
     rooms_list = []
     for room in rooms.values():
-        rooms_list.append(
-            {'name': room.name,
-             'uuid': room.uuid,
-             'disabled': False if room.uuid in possible_rooms else True}
-        )
+        rooms_list.append({"name": room.name, "uuid": room.uuid, "disabled": False if room.uuid in possible_rooms else True})
 
-    context_dict = {"book": book_data,
-                    "neighbour": neighbour,
-                    "ws_address": ws_address,
-                    "rooms": rooms_list,
-                    "shelves": shelves_list,
-                    "time": time.time()}
+    context_dict = {
+        "book": book_data,
+        "neighbour": neighbour,
+        "ws_address": ws_address,
+        "rooms": rooms_list,
+        "shelves": shelves_list,
+        "time": time.time(),
+    }
 
     logging.info(f"Preloading /shelve with values {pprint.pformat(context_dict)}")
 
-    return templates.TemplateResponse(
-        request=request,
-        name="shelve.html",
-        context=context_dict
-    )
+    return templates.TemplateResponse(request=request, name="shelve.html", context=context_dict)
 
 
 @app.get("/withdraw/{uuid}", response_class=HTMLResponse)
 def withdraw(uuid: str, request: Request):
-    user = request.headers.get('Remote-Name')
+    user = request.headers.get("Remote-Name")
     if user is None:
         user = default_user
-    book_data = format_db_record_as_book(
-        DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (uuid,))
-    )
+    book_data = format_db_record_as_book(DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (uuid,)))
 
     DB.execute("INSERT OR REPLACE INTO USERS VALUES (?)", (user,))
     users = [user[0] for user in DB.fetchall("""SELECT name FROM users""")]
@@ -605,9 +570,7 @@ def withdraw(uuid: str, request: Request):
 
 @app.get("/locate/{uuid}", response_class=HTMLResponse)
 def locate(uuid: str, request: Request):
-    book = format_db_record_as_book(
-        DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (uuid,))
-    )
+    book = format_db_record_as_book(DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (uuid,)))
     logging.info(str(book))
 
     if book.natlangpos == "":
@@ -621,7 +584,6 @@ def locate(uuid: str, request: Request):
         shelf = room.shelves[book.shelf]
         book.shelf_name = shelf.name
 
-
     return templates.TemplateResponse(
         request=request,
         name="locate.html",
@@ -634,22 +596,30 @@ def locate(uuid: str, request: Request):
 def add_room(request: Request):
     rooms = get_rooms()
     return templates.TemplateResponse(
-            request=request,
-            name="add_location.html",
-            context={
-                "loctype": "room",
-                "rooms": rooms,
-            },
-        )
+        request=request,
+        name="add_location.html",
+        context={
+            "loctype": "room",
+            "rooms": rooms,
+        },
+    )
+
 
 @app.post("/roomadd")
 def _add_room(room: Annotated[Room, Form()]):
     room.uuid = str(uuid4())
 
     logging.info(f"Adding room {room.name} with uuid {room.uuid}.")
-    DB.execute("""INSERT INTO rooms VALUES (?, ?)""", (room.uuid, room.name,))
+    DB.execute(
+        """INSERT INTO rooms VALUES (?, ?)""",
+        (
+            room.uuid,
+            room.name,
+        ),
+    )
 
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
 
 # TODO: client-side nag if shelf name already exists in room
 @app.get("/addshelf", response_class=HTMLResponse)
@@ -657,14 +627,15 @@ def add_shelf(request: Request):
     rooms = get_rooms()
     shelves = get_shelves()
     return templates.TemplateResponse(
-            request=request,
-            name="add_location.html",
-            context={
-                "loctype": "shelf",
-                "rooms": [room.dict() for room in rooms],
-                "shelves": [shelf.dict() for shelf in shelves],
-            },
-        )
+        request=request,
+        name="add_location.html",
+        context={
+            "loctype": "shelf",
+            "rooms": [room.dict() for room in rooms],
+            "shelves": [shelf.dict() for shelf in shelves],
+        },
+    )
+
 
 @app.post("/shelfadd")
 def _add_shelf(shelf: Annotated[Shelf, Form()]):
@@ -672,7 +643,15 @@ def _add_shelf(shelf: Annotated[Shelf, Form()]):
     room = DB.fetchone("""SELECT name FROM rooms WHERE id LIKE ?""", (shelf.room,))
 
     logging.info(f"Adding shelf {shelf.name} with uuid {shelf.uuid} in room {room}.")
-    DB.execute("""INSERT INTO shelves VALUES (?, ?, ?, ?)""", (shelf.uuid, shelf.name, int(shelf.width), shelf.room,))
+    DB.execute(
+        """INSERT INTO shelves VALUES (?, ?, ?, ?)""",
+        (
+            shelf.uuid,
+            shelf.name,
+            int(shelf.width),
+            shelf.room,
+        ),
+    )
 
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -698,9 +677,7 @@ async def shelve_websocket(websocket: WebSocket):
     while True:
         specs = await websocket.receive_json()
         logging.info(f"New websocket message from /shelve:\n    {'\n    '.join([f'{key}: {specs[key]}' for key in specs.keys()])}")
-        book_data = format_db_record_as_book(
-            DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (specs["uuid"],))
-        )
+        book_data = format_db_record_as_book(DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (specs["uuid"],)))
         book_data.room = specs["room"]
 
         rooms = get_rooms()
@@ -710,33 +687,29 @@ async def shelve_websocket(websocket: WebSocket):
 
         logging.info("Building list of viable shelves")
         try:
-            position, neighbour = suggest_position(book_data, {specs['shelf']: room.shelves[specs['shelf']]}, DB)
-            suggested_shelf = specs['shelf']
+            position, neighbour = suggest_position(book_data, {specs["shelf"]: room.shelves[specs["shelf"]]}, DB)
+            suggested_shelf = specs["shelf"]
         except CouldNotShelveError:
             pass
-
 
         shelves_list = []
         for shelf in list(room.shelves.values())[::-1]:
             try:
                 _position, _neighbour = suggest_position(copy.copy(book_data), {shelf.uuid: room.shelves[shelf.uuid]}, DB)
-                shelves_list.append({'name': shelf.name, 'uuid': shelf.uuid, "disabled": False})
+                shelves_list.append({"name": shelf.name, "uuid": shelf.uuid, "disabled": False})
                 if suggested_shelf is None:
                     suggested_shelf = shelf.uuid
                     position = _position
                     neighbour = _neighbour
             except CouldNotShelveError:
-                shelves_list.append({'name': shelf.name, 'uuid': shelf.uuid, "disabled": True})
+                shelves_list.append({"name": shelf.name, "uuid": shelf.uuid, "disabled": True})
 
-        logging.info(f"{book_data.title} can be shelved on {len([shelf for shelf in shelves_list if not shelf['disabled']])} out of a possible {len(room.shelves)}.")
+        logging.info(
+            f"{book_data.title} can be shelved on {len([shelf for shelf in shelves_list if not shelf['disabled']])} out of a possible {len(room.shelves)}."
+        )
 
-        response = {
-            "neighbour": neighbour,
-            "natlangpos": position.natlangpos,
-            "shelves": shelves_list[::-1],
-            "shelf": suggested_shelf
-        }
+        response = {"neighbour": neighbour, "natlangpos": position.natlangpos, "shelves": shelves_list[::-1], "shelf": suggested_shelf}
 
-        logging.info(f"Response: \n    {pprint.pformat(response, indent=4, width=140)}") 
+        logging.info(f"Response: \n    {pprint.pformat(response, indent=4, width=140)}")
 
         await websocket.send_json(response)

@@ -12,4 +12,4 @@ RUN uv sync --locked --compile-bytecode
 
 ADD . /app
 
-CMD ["uv", "run", "uvicorn", "main:app", "--proxy-headers", "--forwarded-allow-ips=*", "--host", "0.0.0.0", "--port", "8085"]
+CMD ["uv", "run", "uvicorn", "--app-dir", "src", "main:app", "--proxy-headers", "--forwarded-allow-ips=*", "--host", "0.0.0.0", "--port", "8085"]
