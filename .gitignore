@@ -171,4 +171,4 @@ cython_debug/
 .pypirc
 
 */*.db
-*/smartshelf.py
+*/smartshelf_keys.py
