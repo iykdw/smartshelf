@@ -4,6 +4,7 @@ import logging
 import os
 import pprint
 import random
+import re
 import sqlite3
 import sys
 import time
@@ -17,9 +18,10 @@ from fastapi import FastAPI, Form, Request, WebSocket, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 import db_ops
-import smartshelf_keys
 from models import Book, Room, Shelf
 from natlangposition import nat_lang_position
 from rooms_to_db import rooms_to_db
@@ -37,6 +39,12 @@ class UnconfiguredError(Exception):
     pass
 
 
+class Secrets(BaseSettings):
+    GOOGLE_BOOKS_API_KEY: SecretStr
+
+    model_config = SettingsConfigDict(env_file=".env")
+
+
 def has_config(DB):
     try:
         DB.fetchone("""SELECT COUNT(*) FROM books""")
@@ -50,28 +58,28 @@ def has_config(DB):
     return True
 
 
-def get_data_from_api(url):
-    logging.info(f"Requesting data from URL {url}")
+def get_data_from_api(url: str):
+    logger.info(f"Requesting data from URL {url}")
     try:
         response = urlopen(url)
-        logging.info("Response received!")
+        logger.info("Response received!")
         return response
     except HTTPError as e:
-        logging.info(f"Error while requesting data:\n    Code: {e.code}\n    Reason: {e.reason}\n    Headers:\n{'\n    '.join(e.headers)}")
+        logger.info(f"Error while requesting data:\n    Code: {e.code}\n    Reason: {e.reason}\n    Headers:\n{'\n    '.join(e.headers)}")
         return e
         return {"code": e.code, "reason": e.reason, "headers": e.headers.split()}
 
 
 def get_data_from_gb(isbn) -> Book:
     if len(isbn) not in [10, 13]:
-        logging.info(f"Submitted string {isbn} isn't a valid ISBN.")
+        logger.info(f"Submitted string {isbn} isn't a valid ISBN.")
         # TODO: raise an error properly
 
-    logging.info(f"Searching Google Books for ISBN {isbn}.")
+    logger.info(f"Searching Google Books for ISBN {isbn}.")
     isbn = "".join([char for char in isbn if char.isdigit()])
 
-    url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&projection=full&key={smartshelf_keys.GOOGLE_BOOKS_API_KEY}"
-    logging.info("Requesting data from Google Books")
+    url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&projection=full&key={secrets.GOOGLE_BOOKS_API_KEY.get_secret_value()}"
+    logger.info("Requesting data from Google Books")
     response = get_data_from_api(url)
     if isinstance(response, HTTPError):
         return response
@@ -95,8 +103,8 @@ def get_data_from_gb(isbn) -> Book:
 
     book_id = book_data["items"][0]["id"]
 
-    url = f"https://www.googleapis.com/books/v1/volumes/{book_id}?key={smartshelf_keys.GOOGLE_BOOKS_API_KEY}"
-    logging.info(f"Book has ID {book_id}")
+    url = f"https://www.googleapis.com/books/v1/volumes/{book_id}?key={secrets.GOOGLE_BOOKS_API_KEY.get_secret_value()}"
+    logger.info(f"Book has ID {book_id}")
     response = get_data_from_api(url)
 
     book_data = json.load(response)["volumeInfo"]
@@ -114,8 +122,8 @@ def get_data_from_gb(isbn) -> Book:
         withdrawn="",
     )
 
-    logging.info(f"Book {book.title} has been assigned uuid {book.uuid}.")
-    logging.info("Data read, returning now.")
+    logger.info(f"Book {book.title} has been assigned uuid {book.uuid}.")
+    logger.info("Data read, returning now.")
 
     return book
 
@@ -140,7 +148,7 @@ def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops.DB, 
         neighbour = "shelf edge"
 
         if books_on_shelf == []:  # i.e. if shelf is completely empty
-            logging.info(f"    Book {book.title} can be shelved on {shelf.name} ({shelf.uuid}) at {int(book.width / 2)} (shelf is empty)")
+            logger.info(f"    Book {book.title} can be shelved on {shelf.name} ({shelf.uuid}) at {int(book.width / 2)} (shelf is empty)")
             book.shelf = shelf.uuid
             book.position = int(book.width / 2)
             book.natlangpos = "at the far left"
@@ -195,7 +203,7 @@ def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops.DB, 
                 gaps[-1].append(empty[j])
 
         if len(gaps) == 0:
-            logging.info(f"    Shelf {shelf.name} ({shelf.uuid}) completely full; proceeding to next shelf")
+            logger.info(f"    Shelf {shelf.name} ({shelf.uuid}) completely full; proceeding to next shelf")
 
             continue
 
@@ -211,7 +219,7 @@ def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops.DB, 
 
         if (gaps[0][1] - gaps[0][0]) < book.width:
             # if the biggest gap is too small, proceed to next shelf
-            logging.info(f"    Book {book.title} cannot be shelved on shelf {shelf.name} ({shelf.uuid})")
+            logger.info(f"    Book {book.title} cannot be shelved on shelf {shelf.name} ({shelf.uuid})")
             continue
 
         suggested = gaps[0][0] + int(book.width / 2)
@@ -223,7 +231,7 @@ def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops.DB, 
         else:
             book.natlangpos = nat_lang_position(book.position, shelf.width)
 
-        logging.info(f"    Book {book.title} can be shelved on {shelf.name} ({shelf.uuid}) at {suggested}")
+        logger.info(f"    Book {book.title} can be shelved on {shelf.name} ({shelf.uuid}) at {suggested}")
 
         # When would gaps[0][1] ever be undefined?
         if gaps[0][0] == -1 and gaps[0][1]:
@@ -337,14 +345,8 @@ def _build_db(DB):
 default_user = "yasha"
 persist_dir = "storage"
 db_file = "books.db"
-_test_env = False
 mm_per_page = 0.0696729243
-
-
-if "pytest" in sys.modules:
-    _test_env = True
-    persist_dir = "storage/test"
-    db_file = f"{datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d')}.db"
+secrets = Secrets()
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -356,18 +358,29 @@ logging.basicConfig(
     ],
 )
 
-logger = logging.getLogger(__name__)
-logger.info("Hello, world!")
+REDACT_REGEXES = [r"(key=[ ]?)([^&]*)"]
 
+
+class LoggingFilter(logging.Filter):
+    def __init__(self, patterns):
+        super().__init__()
+        self.patterns = patterns
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for pattern in self.patterns:
+            record.msg = re.sub(pattern, "<REDACTED>", record.msg)
+        return True
+
+
+logger = logging.getLogger(__name__)
+logger.addFilter(LoggingFilter(REDACT_REGEXES))
+logger.info("Hello, world!")
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 DB = db_ops.DB(persist_dir, db_file, logging)
-
-if _test_env:
-    _build_db(DB)
 
 _build_db(DB)
 
@@ -409,7 +422,7 @@ def add_book(isbn: str):
     while isinstance(book_data, HTTPError):
         if book_data.code == 503:
             this_backoff = backoff + random.randint(1, 10) / 10
-            logging.info(f"Server 503'd, sleeping for {this_backoff}s.")
+            logger.info(f"Server 503'd, sleeping for {this_backoff}s.")
             this_backoff = backoff + random.randint(1, 10) / 10
             if backoff < 4:
                 backoff = backoff * 2
@@ -505,7 +518,7 @@ async def shelve(book_uuid: str, request: Request):
         room_uuid = next(iter(list(rooms.keys())))
         room = rooms[room_uuid]
 
-        logging.info(room.name)
+        logger.info(room.name)
 
         viable_shelves = {}
         for shelf in list(room.shelves.values()):
@@ -522,7 +535,7 @@ async def shelve(book_uuid: str, request: Request):
             if room.uuid not in possible_rooms:
                 possible_rooms.append(room.uuid)
 
-        logging.info(
+        logger.info(
             f"    {book_data.title} can be shelved on {len(viable_shelves.keys())} out of a possible {len(room.shelves)} in {room.name}."
         )
 
@@ -543,7 +556,7 @@ async def shelve(book_uuid: str, request: Request):
         "time": time.time(),
     }
 
-    logging.info(f"Preloading /shelve with values {pprint.pformat(context_dict)}")
+    logger.info(f"Preloading /shelve with values {pprint.pformat(context_dict)}")
 
     return templates.TemplateResponse(request=request, name="shelve.html", context=context_dict)
 
@@ -571,7 +584,7 @@ def withdraw(uuid: str, request: Request):
 @app.get("/locate/{uuid}", response_class=HTMLResponse)
 def locate(uuid: str, request: Request):
     book = format_db_record_as_book(DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (uuid,)))
-    logging.info(str(book))
+    logger.info(str(book))
 
     if book.natlangpos == "":
         shelf = book.shelf
@@ -609,7 +622,7 @@ def add_room(request: Request):
 def _add_room(room: Annotated[Room, Form()]):
     room.uuid = str(uuid4())
 
-    logging.info(f"Adding room {room.name} with uuid {room.uuid}.")
+    logger.info(f"Adding room {room.name} with uuid {room.uuid}.")
     DB.execute(
         """INSERT INTO rooms VALUES (?, ?)""",
         (
@@ -642,7 +655,7 @@ def _add_shelf(shelf: Annotated[Shelf, Form()]):
     shelf.uuid = str(uuid4())
     room = DB.fetchone("""SELECT name FROM rooms WHERE id LIKE ?""", (shelf.room,))
 
-    logging.info(f"Adding shelf {shelf.name} with uuid {shelf.uuid} in room {room}.")
+    logger.info(f"Adding shelf {shelf.name} with uuid {shelf.uuid} in room {room}.")
     DB.execute(
         """INSERT INTO shelves VALUES (?, ?, ?, ?)""",
         (
@@ -676,7 +689,7 @@ async def shelve_websocket(websocket: WebSocket):
 
     while True:
         specs = await websocket.receive_json()
-        logging.info(f"New websocket message from /shelve:\n    {'\n    '.join([f'{key}: {specs[key]}' for key in specs.keys()])}")
+        logger.info(f"New websocket message from /shelve:\n    {'\n    '.join([f'{key}: {specs[key]}' for key in specs.keys()])}")
         book_data = format_db_record_as_book(DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (specs["uuid"],)))
         book_data.room = specs["room"]
 
@@ -685,7 +698,7 @@ async def shelve_websocket(websocket: WebSocket):
 
         suggested_shelf = None
 
-        logging.info("Building list of viable shelves")
+        logger.info("Building list of viable shelves")
         try:
             position, neighbour = suggest_position(book_data, {specs["shelf"]: room.shelves[specs["shelf"]]}, DB)
             suggested_shelf = specs["shelf"]
@@ -704,12 +717,12 @@ async def shelve_websocket(websocket: WebSocket):
             except CouldNotShelveError:
                 shelves_list.append({"name": shelf.name, "uuid": shelf.uuid, "disabled": True})
 
-        logging.info(
+        logger.info(
             f"{book_data.title} can be shelved on {len([shelf for shelf in shelves_list if not shelf['disabled']])} out of a possible {len(room.shelves)}."
         )
 
         response = {"neighbour": neighbour, "natlangpos": position.natlangpos, "shelves": shelves_list[::-1], "shelf": suggested_shelf}
 
-        logging.info(f"Response: \n    {pprint.pformat(response, indent=4, width=140)}")
+        logger.info(f"Response: \n    {pprint.pformat(response, indent=4, width=140)}")
 
         await websocket.send_json(response)
