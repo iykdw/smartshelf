@@ -1,11 +1,12 @@
+import contextlib
 import copy
 import json
 import logging
-import os
 import pprint
 import random
 import re
 import sqlite3
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -21,10 +22,11 @@ from fastapi.templating import Jinja2Templates
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-import db_ops
+from db_ops import DB as db_ops_DB
 from models import Book, Room, Shelf
 from natlangposition import nat_lang_position
 from rooms_to_db import rooms_to_db
+from smartshelf_types import BookRecordFromDB
 
 
 class CouldNotShelveError(Exception):
@@ -67,7 +69,6 @@ def get_data_from_api(url: str):
     except HTTPError as e:
         logger.info(f"Error while requesting data:\n    Code: {e.code}\n    Reason: {e.reason}\n    Headers:\n{'\n    '.join(e.headers)}")
         return e
-        return {"code": e.code, "reason": e.reason, "headers": e.headers.split()}
 
 
 def get_data_from_gb(isbn) -> Book:
@@ -97,8 +98,12 @@ def get_data_from_gb(isbn) -> Book:
             width=0,
             room="",
             shelf="",
+            shelf_name="",
             position=-1,
             withdrawn="",
+            time="",
+            user="",
+            natlangpos="",
         )
 
     book_id = book_data["items"][0]["id"]
@@ -112,14 +117,18 @@ def get_data_from_gb(isbn) -> Book:
         uuid=str(uuid4()),
         isbn=isbn,
         title=book_data["title"],
-        subtitle=book_data["subtitle"] if "subtitle" in book_data else "",
+        subtitle=book_data.get("subtitle", ""),
         author=", ".join(book_data["authors"]) if "authors" in book_data else "",
-        pages=book_data["printedPageCount"] if "printedPageCount" in book_data else 0,
+        pages=book_data.get("printedPageCount", 0),
         width=int((int(book_data["printedPageCount"]) if "printedPageCount" in book_data else 0) * mm_per_page),
         room="",
         shelf="",
+        shelf_name="",
         position=-1,
         withdrawn="",
+        time="",
+        user="",
+        natlangpos="",
     )
 
     logger.info(f"Book {book.title} has been assigned uuid {book.uuid}.")
@@ -128,7 +137,7 @@ def get_data_from_gb(isbn) -> Book:
     return book
 
 
-def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops.DB, requested_shelf: str = "") -> tuple[Book, str]:
+def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops_DB, requested_shelf: str = "") -> tuple[Book, str]:
     shelves = []
 
     if requested_shelf != "":
@@ -168,10 +177,7 @@ def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops.DB, 
             end = int(shelved_book[2] + hw)
             logging.debug(f"    {shelved_book[0]} in position {start}-{end}")
 
-            if start in empty:
-                curr = start  # remove the millimeters occupied by this book
-            else:
-                curr = start + 1
+            curr = start if start in empty else start + 1
 
             while curr <= end:
                 try:
@@ -258,7 +264,17 @@ def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops.DB, 
     raise CouldNotShelveError
 
 
-def get_rooms() -> dict[str, Book]:
+def get_book_from_uuid(uuid: str) -> Book | None:
+    book_data: BookRecordFromDB = DB.fetchone("""SELECT * FROM books WHERE uuid = ?""", (uuid,))
+
+    if not book_data:
+        return None
+
+    book = format_db_record_as_book(book_data)
+    return book
+
+
+def get_rooms() -> dict[str, Room]:
     room_data = DB.fetchall("""SELECT * FROM rooms""")
     rooms = {}
     for r in room_data:
@@ -285,8 +301,8 @@ def get_shelves(room: str = "") -> list[Shelf]:
     return shelves
 
 
-def format_book_for_db_insertion(book: Book) -> tuple[str | int]:
-    return_data = (
+def format_book_for_db_insertion(book: Book) -> BookRecordFromDB:
+    return (
         book.uuid,
         book.isbn,
         book.title,
@@ -294,16 +310,17 @@ def format_book_for_db_insertion(book: Book) -> tuple[str | int]:
         book.author,
         book.pages,
         book.room,
-        book.shelf,  # Shelf
-        book.position,  # Position
+        book.shelf,
+        book.position,
         book.width,
-        book.withdrawn,  # Status
+        book.withdrawn,
     )
 
-    return return_data
 
+def format_db_record_as_book(record: BookRecordFromDB) -> Book:
+    shelves = get_shelves(record[6])
+    shelf_name = next(shelf.name for shelf in shelves if shelf.uuid == record[7])
 
-def format_db_record_as_book(record: tuple[str | int]) -> Book:
     return Book(
         uuid=record[0],
         isbn=record[1],
@@ -311,16 +328,20 @@ def format_db_record_as_book(record: tuple[str | int]) -> Book:
         subtitle=record[3],
         author=record[4],
         pages=record[5],
+        width=record[9],
         room=record[6],
         shelf=record[7],
+        shelf_name=shelf_name,
         position=record[8],
-        width=record[9],
         withdrawn=record[10],
+        time="0",
+        user="0",
+        natlangpos="",
     )
 
 
 def _build_db(DB):
-    os.system(f'uv run sqlite3 {persist_dir}/{db_file} ".read table_schema.sql"')
+    subprocess.run(["uv", "run", "sqlite3", f"{persist_dir}/{db_file}", '".read table_schema.sql"'])
     if len(get_rooms().keys()) == 0:
         rooms_to_db(DB, f"{persist_dir}/rooms.json")
     return
@@ -330,7 +351,7 @@ def _build_db(DB):
         for isbn in isbns:
             book = DB.fetchone("""SELECT COUNT(*) FROM books WHERE isbn = ?""", (isbn,))
             rooms = get_rooms()
-            room = list(rooms.keys())[0]
+            room = next(iter(rooms.keys()))
             if book[0] == 0:
                 book = get_data_from_gb(isbn)
                 book, _ = suggest_position(book, rooms[room].shelves, DB)
@@ -368,7 +389,8 @@ class LoggingFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         for pattern in self.patterns:
-            record.msg = re.sub(pattern, "<REDACTED>", record.msg)
+            with contextlib.suppress(TypeError):
+                record.msg = re.sub(pattern, "<REDACTED>", record.msg)
         return True
 
 
@@ -380,7 +402,7 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-DB = db_ops.DB(persist_dir, db_file, logging)
+DB = db_ops_DB(persist_dir, db_file, logging)
 
 _build_db(DB)
 
@@ -430,6 +452,8 @@ def add_book(isbn: str):
         else:
             return None
 
+    logger.info(book_data)
+
     DB.execute(
         """INSERT OR REPLACE INTO books VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         format_book_for_db_insertion(book_data),
@@ -459,7 +483,7 @@ def edit_book(request: Request, uuid: str):
         name="validate.html",
         context={
             "book": book_data,
-            "rooms": [get_rooms()[room].name for room in get_rooms().keys()],
+            "rooms": [get_rooms()[room].name for room in get_rooms()],
             "mm_per_page": mm_per_page,
         },
     )
@@ -467,7 +491,6 @@ def edit_book(request: Request, uuid: str):
 
 @app.post("/update")
 async def update_book(book: Annotated[Book, Form()]):
-    print(book)
     if book.time != "0":
         time = round(float(book.time))
 
@@ -541,11 +564,11 @@ async def shelve(book_uuid: str, request: Request):
 
     shelves_list = []
     for shelf in room.shelves.values():
-        shelves_list.append({"name": shelf.name, "uuid": shelf.uuid, "disabled": False if shelf.uuid in viable_shelves else True})
+        shelves_list.append({"name": shelf.name, "uuid": shelf.uuid, "disabled": shelf.uuid not in viable_shelves})
 
     rooms_list = []
     for room in rooms.values():
-        rooms_list.append({"name": room.name, "uuid": room.uuid, "disabled": False if room.uuid in possible_rooms else True})
+        rooms_list.append({"name": room.name, "uuid": room.uuid, "disabled": room.uuid not in possible_rooms})
 
     context_dict = {
         "book": book_data,
@@ -644,8 +667,8 @@ def add_shelf(request: Request):
         name="add_location.html",
         context={
             "loctype": "shelf",
-            "rooms": [room.dict() for room in rooms],
-            "shelves": [shelf.dict() for shelf in shelves],
+            "rooms": [room for room in rooms],
+            "shelves": [shelf.model_dump() for shelf in shelves],
         },
     )
 
@@ -689,7 +712,7 @@ async def shelve_websocket(websocket: WebSocket):
 
     while True:
         specs = await websocket.receive_json()
-        logger.info(f"New websocket message from /shelve:\n    {'\n    '.join([f'{key}: {specs[key]}' for key in specs.keys()])}")
+        logger.info(f"New websocket message from /shelve:\n    {'\n    '.join([f'{key}: {specs[key]}' for key in specs])}")
         book_data = format_db_record_as_book(DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (specs["uuid"],)))
         book_data.room = specs["room"]
 
@@ -717,9 +740,9 @@ async def shelve_websocket(websocket: WebSocket):
             except CouldNotShelveError:
                 shelves_list.append({"name": shelf.name, "uuid": shelf.uuid, "disabled": True})
 
-        logger.info(
-            f"{book_data.title} can be shelved on {len([shelf for shelf in shelves_list if not shelf['disabled']])} out of a possible {len(room.shelves)}."
-        )
+        num_viable_shelves = len([shelf for shelf in shelves_list if not shelf["disabled"]])
+
+        logger.info(f"{book_data.title} can be shelved on {num_viable_shelves} out of a possible {len(room.shelves)}.")
 
         response = {"neighbour": neighbour, "natlangpos": position.natlangpos, "shelves": shelves_list[::-1], "shelf": suggested_shelf}
 

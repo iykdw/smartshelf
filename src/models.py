@@ -1,11 +1,9 @@
-from typing import Optional
-
 from pydantic import BaseModel
-from pydantic import Field
+
 
 class Book(BaseModel):
     uuid: str
-    isbn: str 
+    isbn: str
     title: str
     subtitle: str
     author: str
@@ -13,12 +11,12 @@ class Book(BaseModel):
     width: int
     room: str
     shelf: str
-    shelf_name: Optional[str] = Field(default="")
+    shelf_name: str
     position: int
     withdrawn: str
-    time: Optional[str] = Field(default="0")
-    user: Optional[str] = Field(default="")
-    natlangpos: Optional[str] = Field(default="")
+    time: str
+    user: str
+    natlangpos: str
 
 
 class Shelf(BaseModel):
