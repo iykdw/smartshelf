@@ -18,13 +18,12 @@ from fastapi import FastAPI, Form, Request, WebSocket, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 import db_ops
 from models import Book, Room, Shelf
 from natlangposition import nat_lang_position
 from rooms_to_db import rooms_to_db
+from smartshelf_secrets import Secrets
 
 
 class CouldNotShelveError(Exception):
@@ -35,14 +34,12 @@ class DatabaseNotFoundError(Exception):
     pass
 
 
-class UnconfiguredError(Exception):
+class InvalidISBNError(Exception):
     pass
 
 
-class Secrets(BaseSettings):
-    GOOGLE_BOOKS_API_KEY: SecretStr
-
-    model_config = SettingsConfigDict(env_file=".env")
+class UnconfiguredError(Exception):
+    pass
 
 
 def has_config(DB):
@@ -67,13 +64,12 @@ def get_data_from_api(url: str):
     except HTTPError as e:
         logger.info(f"Error while requesting data:\n    Code: {e.code}\n    Reason: {e.reason}\n    Headers:\n{'\n    '.join(e.headers)}")
         return e
-        return {"code": e.code, "reason": e.reason, "headers": e.headers.split()}
 
 
-def get_data_from_gb(isbn) -> Book:
+def get_data_from_gb(isbn: str) -> Book:
     if len(isbn) not in [10, 13]:
         logger.info(f"Submitted string {isbn} isn't a valid ISBN.")
-        # TODO: raise an error properly
+        raise InvalidISBNError
 
     logger.info(f"Searching Google Books for ISBN {isbn}.")
     isbn = "".join([char for char in isbn if char.isdigit()])
