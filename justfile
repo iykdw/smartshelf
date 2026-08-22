@@ -9,3 +9,7 @@ run:
 
 rebuild: build run
    docker run -p 8085:8085 --rm smartshelf
+
+publish: build
+    docker tag smartshelf praxidyke/smartshelf:latest
+    docker push praxidyke/smartshelf

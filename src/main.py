@@ -316,7 +316,10 @@ def format_book_for_db_insertion(book: Book) -> BookRecordFromDB:
 
 def format_db_record_as_book(record: BookRecordFromDB) -> Book:
     shelves = get_shelves(record[6])
-    shelf_name = next(shelf.name for shelf in shelves if shelf.uuid == record[7])
+    try:
+        shelf_name = next(shelf.name for shelf in shelves if shelf.uuid == record[7])
+    except StopIteration:
+        shelf_name = ""
 
     return Book(
         uuid=record[0],
