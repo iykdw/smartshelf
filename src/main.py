@@ -1,12 +1,14 @@
 import copy
 import json
 import logging
+import os
 import pprint
 import random
 import sqlite3
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated
 from urllib.error import HTTPError
 from urllib.request import urlopen
@@ -67,20 +69,22 @@ templates = Jinja2Templates(directory="templates")
 
 if __name__ == "__main__":
     default_user = "yasha"
-    persist_dir = "storage"
-    db_file = "books.db"
+    cwd = os.getcwd()
+    persist_dir = Path(cwd) / "storage"
+    db_file = Path(persist_dir) / "books.db"
     mm_per_page = 0.0696729243
     secrets = Secrets()
+    log_file = Path(persist_dir) / "debug.log"
 
-    log_files = [f"{persist_dir}/debug.log"]
+    log_files = [log_file.resolve()]
     log_streams = [sys.stdout]
 
     logger = smartshelf_logger.get_logger(log_files, log_streams, logging.DEBUG, __name__)
     logger.info("Hello, world!")
 
-    DB = db_ops_DB(persist_dir, db_file, logger)
+    DB = db_ops_DB(db_file.resolve(), logger)
 
-    logger.info(f"Checking db at {persist_dir}/{db_file}...")
+    logger.info(f"Checking db at {db_file.resolve()}...")
     if _has_config(DB):
         logger.info("DB check complete.")
     else:

@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import re
+from pathlib import Path
 from typing import Any
 
 
@@ -16,12 +17,12 @@ class LogRedacter(logging.Filter):
         return True
 
 
-def get_logger(files: list[str], streams: list[Any], level, name):
+def get_logger(files: list[Path], streams: list[Any], level, name):
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
     for file in files:
-        handler = logging.FileHandler(file)
+        handler = logging.FileHandler(file.resolve())
         handler.setFormatter(
             logging.Formatter(
                 fmt="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s", datefmt="%Y-%m-%d:%H:%M:%S"
