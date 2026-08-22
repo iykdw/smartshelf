@@ -1,19 +1,20 @@
 import sqlite3
 from contextlib import closing
+from pathlib import Path
 from typing import Any
 
 
 class DB:
-    def __init__(self, persist, file, logging):
-        self.persist = persist
+    def __init__(self, db_file: Path, logging):
         self.logging = logging
-        self.file = file
+        self.file = db_file
+        self.logging.debug(self.fetchall("""SELECT name FROM sqlite_master WHERE type='table';"""))
 
     def log_trace(self, statement: str):
         self.logging.debug(statement)
 
     def _db_execute(self, command: str, args: tuple[str, ...], com_type: int) -> list[None | list[str]]:
-        with closing(sqlite3.connect(f"{self.persist}/{self.file}")) as connection:
+        with closing(sqlite3.connect(self.file.resolve())) as connection:
             connection.set_trace_callback(self.log_trace)
             with closing(connection.cursor()) as c:
                 if com_type == 2:
@@ -24,7 +25,7 @@ class DB:
                 connection.commit()
                 return []
 
-    def execute(self, command: str, args: tuple[Any, ...] | None = None) -> None:
+    def execute(self, command: str, args: tuple[Any, ...] | None = tuple()) -> None:
         if not args:
             args = tuple()
         self.logging.debug(command)

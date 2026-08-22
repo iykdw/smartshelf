@@ -1,15 +1,14 @@
-import contextlib
 import copy
 import json
 import logging
+import os
 import pprint
 import random
-import re
 import sqlite3
-import subprocess
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated
 from urllib.error import HTTPError
 from urllib.request import urlopen
@@ -20,6 +19,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+import smartshelf_logger
 from db_ops import DB as db_ops_DB
 from models import Book, Room, Shelf
 from natlangposition import nat_lang_position
@@ -44,7 +44,7 @@ class UnconfiguredError(Exception):
     pass
 
 
-def has_config(DB):
+def _has_config(DB):
     try:
         DB.fetchone("""SELECT COUNT(*) FROM books""")
         DB.fetchone("""SELECT COUNT(*) FROM transactions""")
@@ -55,6 +55,37 @@ def has_config(DB):
         return False
 
     return True
+
+
+app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
+default_user = "yasha"
+cwd = os.getcwd()
+persist_dir = Path(cwd) / "storage"
+db_file = Path(persist_dir) / "books.db"
+rooms_file = Path(persist_dir) / "rooms.json"
+schemafile = Path(cwd) / "table_schema.sql"
+mm_per_page = 0.0696729243
+secrets = Secrets()
+log_file = Path(persist_dir) / "debug.log"
+
+log_files = [log_file.resolve()]
+log_streams = [sys.stdout]
+
+logger = smartshelf_logger.get_logger(log_files, log_streams, logging.DEBUG, __name__)
+logger.info("Hello, world!")
+
+DB = db_ops_DB(db_file.resolve(), logger)
+
+logger.info(f"Checking db at {db_file.resolve()}...")
+if _has_config(DB):
+    logger.info("DB check complete.")
+else:
+    os.system(f'uv run sqlite3 {db_file.resolve()} ".read {schemafile.resolve()}"')
+    rooms_to_db(DB, rooms_file.resolve())
+    logger.info("DB check complete.")
 
 
 def get_data_from_api(url: str):
@@ -340,79 +371,6 @@ def format_db_record_as_book(record: BookRecordFromDB) -> Book:
     )
 
 
-def _build_db(DB):
-    subprocess.run(["uv", "run", "sqlite3", f"{persist_dir}/{db_file}", '".read table_schema.sql"'])
-    if len(get_rooms().keys()) == 0:
-        rooms_to_db(DB, f"{persist_dir}/rooms.json")
-    return
-    # Only if we want to populate the db
-    with open(f"{persist_dir}/isbns.json") as f:
-        isbns = json.loads(f.read())
-        for isbn in isbns:
-            book = DB.fetchone("""SELECT COUNT(*) FROM books WHERE isbn = ?""", (isbn,))
-            rooms = get_rooms()
-            room = next(iter(rooms.keys()))
-            if book[0] == 0:
-                book = get_data_from_gb(isbn)
-                book, _ = suggest_position(book, rooms[room].shelves, DB)
-                book.room = room
-                print(book)
-                DB.execute(
-                    """INSERT OR REPLACE INTO books VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    format_book_for_db_insertion(book),
-                )
-
-
-default_user = "yasha"
-persist_dir = "storage"
-db_file = "books.db"
-mm_per_page = 0.0696729243
-secrets = Secrets()
-
-logging.basicConfig(
-    format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
-    datefmt="%Y-%m-%d:%H:%M:%S",
-    level=logging.INFO,
-    handlers=[
-        logging.FileHandler(f"{persist_dir}/debug.log"),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-
-REDACT_REGEXES = [r"(key=[ ]?)([^&]*)"]
-
-
-class LoggingFilter(logging.Filter):
-    def __init__(self, patterns):
-        super().__init__()
-        self.patterns = patterns
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        for pattern in self.patterns:
-            with contextlib.suppress(TypeError):
-                record.msg = re.sub(pattern, "<REDACTED>", record.msg)
-        return True
-
-
-logger = logging.getLogger(__name__)
-logger.addFilter(LoggingFilter(REDACT_REGEXES))
-logger.info("Hello, world!")
-
-app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-
-DB = db_ops_DB(persist_dir, db_file, logging)
-
-_build_db(DB)
-
-logger.info(f"Checking db at {persist_dir}/{db_file}...")
-if has_config(DB):
-    logger.info("DB check complete.")
-else:
-    raise DatabaseNotFoundError
-
-
 @app.get("/", response_class=HTMLResponse)
 def get_library(request: Request):
     if request["type"] == "https":
@@ -420,7 +378,7 @@ def get_library(request: Request):
     else:
         ws_address = f"ws://{str(request.url).split('/')[2]}/search"
 
-    if not has_config(DB):
+    if not _has_config(DB):
         raise UnconfiguredError
 
     books_raw = DB.fetchall("""SELECT * FROM books""")[::-1]
