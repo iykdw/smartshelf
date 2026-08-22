@@ -25,6 +25,7 @@ import smartshelf_logger
 from db_ops import DB as db_ops_DB
 from models import Book, Room, Shelf
 from natlangposition import nat_lang_position
+from rooms_to_db import rooms_to_db
 from smartshelf_types import BookRecordFromDB
 
 
@@ -67,28 +68,29 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-if __name__ == "__main__":
-    default_user = "yasha"
-    cwd = os.getcwd()
-    persist_dir = Path(cwd) / "storage"
-    db_file = Path(persist_dir) / "books.db"
-    mm_per_page = 0.0696729243
-    secrets = Secrets()
-    log_file = Path(persist_dir) / "debug.log"
+default_user = "yasha"
+cwd = os.getcwd()
+persist_dir = Path(cwd) / "storage"
+db_file = Path(persist_dir) / "books.db"
+mm_per_page = 0.0696729243
+secrets = Secrets()
+log_file = Path(persist_dir) / "debug.log"
 
-    log_files = [log_file.resolve()]
-    log_streams = [sys.stdout]
+log_files = [log_file.resolve()]
+log_streams = [sys.stdout]
 
-    logger = smartshelf_logger.get_logger(log_files, log_streams, logging.DEBUG, __name__)
-    logger.info("Hello, world!")
+logger = smartshelf_logger.get_logger(log_files, log_streams, logging.DEBUG, __name__)
+logger.info("Hello, world!")
 
-    DB = db_ops_DB(db_file.resolve(), logger)
+DB = db_ops_DB(db_file.resolve(), logger)
 
-    logger.info(f"Checking db at {db_file.resolve()}...")
-    if _has_config(DB):
-        logger.info("DB check complete.")
-    else:
-        raise DatabaseNotFoundError
+logger.info(f"Checking db at {db_file.resolve()}...")
+if _has_config(DB):
+    logger.info("DB check complete.")
+else:
+    os.system(f'uv run sqlite3 {db_file.resolve()} ".read table_schema.sql"')
+    rooms_to_db(DB, "storage/rooms.json")
+    logger.info("DB check complete.")
 
 
 def get_data_from_api(url: str):
@@ -350,7 +352,10 @@ def format_book_for_db_insertion(book: Book) -> BookRecordFromDB:
 
 def format_db_record_as_book(record: BookRecordFromDB) -> Book:
     shelves = get_shelves(record[6])
-    shelf_name = next(shelf.name for shelf in shelves if shelf.uuid == record[7])
+    try:
+        shelf_name = next(shelf.name for shelf in shelves if shelf.uuid == record[7])
+    except StopIteration:
+        shelf_name = ""
 
     return Book(
         uuid=record[0],
@@ -378,7 +383,7 @@ def get_library(request: Request):
     else:
         ws_address = f"ws://{str(request.url).split('/')[2]}/search"
 
-    if not has_config(DB):
+    if not _has_config(DB):
         raise UnconfiguredError
 
     books_raw = DB.fetchall("""SELECT * FROM books""")[::-1]
