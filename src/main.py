@@ -40,14 +40,6 @@ class InvalidISBNError(Exception):
     pass
 
 
-class InvalidISBNError(Exception):
-    pass
-
-
-class Secrets(BaseSettings):
-    GOOGLE_BOOKS_API_KEY: SecretStr
-
-    model_config = SettingsConfigDict(env_file=".env")
 class UnconfiguredError(Exception):
     pass
 
@@ -73,6 +65,8 @@ default_user = "yasha"
 cwd = os.getcwd()
 persist_dir = Path(cwd) / "storage"
 db_file = Path(persist_dir) / "books.db"
+rooms_file = Path(persist_dir) / "rooms.json"
+schemafile = Path(cwd) / "table_schema.sql"
 mm_per_page = 0.0696729243
 secrets = Secrets()
 log_file = Path(persist_dir) / "debug.log"
@@ -89,8 +83,8 @@ logger.info(f"Checking db at {db_file.resolve()}...")
 if _has_config(DB):
     logger.info("DB check complete.")
 else:
-    os.system(f'uv run sqlite3 {db_file.resolve()} ".read table_schema.sql"')
-    rooms_to_db(DB, "storage/rooms.json")
+    os.system(f'uv run sqlite3 {db_file.resolve()} ".read {schemafile.resolve()}"')
+    rooms_to_db(DB, rooms_file.resolve())
     logger.info("DB check complete.")
 
 
