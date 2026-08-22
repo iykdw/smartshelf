@@ -1,12 +1,9 @@
-import contextlib
 import copy
 import json
 import logging
 import pprint
 import random
-import re
 import sqlite3
-import subprocess
 import sys
 import time
 from datetime import datetime
@@ -22,10 +19,10 @@ from fastapi.templating import Jinja2Templates
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+import smartshelf_logger
 from db_ops import DB as db_ops_DB
 from models import Book, Room, Shelf
 from natlangposition import nat_lang_position
-from rooms_to_db import rooms_to_db
 from smartshelf_types import BookRecordFromDB
 
 
@@ -41,13 +38,17 @@ class UnconfiguredError(Exception):
     pass
 
 
+class InvalidISBNError(Exception):
+    pass
+
+
 class Secrets(BaseSettings):
     GOOGLE_BOOKS_API_KEY: SecretStr
 
     model_config = SettingsConfigDict(env_file=".env")
 
 
-def has_config(DB):
+def _has_config(DB):
     try:
         DB.fetchone("""SELECT COUNT(*) FROM books""")
         DB.fetchone("""SELECT COUNT(*) FROM transactions""")
@@ -58,6 +59,32 @@ def has_config(DB):
         return False
 
     return True
+
+
+app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
+if __name__ == "__main__":
+    default_user = "yasha"
+    persist_dir = "storage"
+    db_file = "books.db"
+    mm_per_page = 0.0696729243
+    secrets = Secrets()
+
+    log_files = [f"{persist_dir}/debug.log"]
+    log_streams = [sys.stdout]
+
+    logger = smartshelf_logger.get_logger(log_files, log_streams, logging.DEBUG, __name__)
+    logger.info("Hello, world!")
+
+    DB = db_ops_DB(persist_dir, db_file, logger)
+
+    logger.info(f"Checking db at {persist_dir}/{db_file}...")
+    if _has_config(DB):
+        logger.info("DB check complete.")
+    else:
+        raise DatabaseNotFoundError
 
 
 def get_data_from_api(url: str):
@@ -338,79 +365,6 @@ def format_db_record_as_book(record: BookRecordFromDB) -> Book:
         user="0",
         natlangpos="",
     )
-
-
-def _build_db(DB):
-    subprocess.run(["uv", "run", "sqlite3", f"{persist_dir}/{db_file}", '".read table_schema.sql"'])
-    if len(get_rooms().keys()) == 0:
-        rooms_to_db(DB, f"{persist_dir}/rooms.json")
-    return
-    # Only if we want to populate the db
-    with open(f"{persist_dir}/isbns.json") as f:
-        isbns = json.loads(f.read())
-        for isbn in isbns:
-            book = DB.fetchone("""SELECT COUNT(*) FROM books WHERE isbn = ?""", (isbn,))
-            rooms = get_rooms()
-            room = next(iter(rooms.keys()))
-            if book[0] == 0:
-                book = get_data_from_gb(isbn)
-                book, _ = suggest_position(book, rooms[room].shelves, DB)
-                book.room = room
-                print(book)
-                DB.execute(
-                    """INSERT OR REPLACE INTO books VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    format_book_for_db_insertion(book),
-                )
-
-
-default_user = "yasha"
-persist_dir = "storage"
-db_file = "books.db"
-mm_per_page = 0.0696729243
-secrets = Secrets()
-
-logging.basicConfig(
-    format="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
-    datefmt="%Y-%m-%d:%H:%M:%S",
-    level=logging.INFO,
-    handlers=[
-        logging.FileHandler(f"{persist_dir}/debug.log"),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-
-REDACT_REGEXES = [r"(key=[ ]?)([^&]*)"]
-
-
-class LoggingFilter(logging.Filter):
-    def __init__(self, patterns):
-        super().__init__()
-        self.patterns = patterns
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        for pattern in self.patterns:
-            with contextlib.suppress(TypeError):
-                record.msg = re.sub(pattern, "<REDACTED>", record.msg)
-        return True
-
-
-logger = logging.getLogger(__name__)
-logger.addFilter(LoggingFilter(REDACT_REGEXES))
-logger.info("Hello, world!")
-
-app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-
-DB = db_ops_DB(persist_dir, db_file, logging)
-
-_build_db(DB)
-
-logger.info(f"Checking db at {persist_dir}/{db_file}...")
-if has_config(DB):
-    logger.info("DB check complete.")
-else:
-    raise DatabaseNotFoundError
 
 
 @app.get("/", response_class=HTMLResponse)
