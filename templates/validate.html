@@ -42,8 +42,12 @@
                 </select>
             </p>
             <input type="number" id="shelf" name="shelf" value="{{ book.shelf }}" hidden>
+            <input type="text" id="shelf_name" name="shelf_name" value="{{ book.shelf_name }}" hidden>
             <input type="number" id="position" name="position" value="{{ book.position }}" hidden>
-            <input type="number" id="withdrawn" name="withdrawn" value="{{ book.withdrawn }}" hidden>
+            <input type="text" id="withdrawn" name="withdrawn" value="{{ book.withdrawn }}" hidden>
+            <input type="text" id="time" name="time" value="{{ book.time }}" hidden>
+            <input type="text" id="user" name="user" value="{{ book.user }}" hidden>
+            <input type="text" id="natlangpos" name="natlangpos" value="{{ book.natlangpos }}" hidden>
             <input class="button-3" role="button" type="submit" value="{% if book.shelf == -2 %}Shelve{% else %}Submit{% endif %}">
         </form>
     </body>
