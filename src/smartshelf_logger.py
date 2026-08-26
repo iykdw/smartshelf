@@ -28,6 +28,7 @@ def get_logger(files: list[Path], streams: list[Any], level, name):
                 fmt="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s", datefmt="%Y-%m-%d:%H:%M:%S"
             )
         )
+        handler.setLevel(level)
         logger.addHandler(handler)
     for stream in streams:
         handler = logging.StreamHandler(stream)
@@ -36,8 +37,10 @@ def get_logger(files: list[Path], streams: list[Any], level, name):
                 fmt="%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s", datefmt="%Y-%m-%d:%H:%M:%S"
             )
         )
+        handler.setLevel(level)
         logger.addHandler(handler)
 
+    logger.info("Hello, world!")
     SECRET_REGEXES = [r"(key=[ ]?)([^&]*)"]
     logger.addFilter(LogRedacter(SECRET_REGEXES))
 

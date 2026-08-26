@@ -1,6 +1,5 @@
 import copy
 import json
-import logging
 import os
 import pprint
 import random
@@ -8,6 +7,7 @@ import sqlite3
 import sys
 import time
 from datetime import datetime
+from logging import INFO
 from pathlib import Path
 from typing import Annotated
 from urllib.error import HTTPError
@@ -74,7 +74,7 @@ log_file = Path(persist_dir) / "debug.log"
 log_files = [log_file.resolve()]
 log_streams = [sys.stdout]
 
-logger = smartshelf_logger.get_logger(log_files, log_streams, logging.DEBUG, __name__)
+logger = smartshelf_logger.get_logger(log_files, log_streams, INFO, __name__)
 logger.info("Hello, world!")
 
 DB = db_ops_DB(db_file.resolve(), logger)
@@ -196,14 +196,14 @@ def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops_DB, 
             )
         # if shelf is not empty
         empty: list[int] = list(range(shelf.width))
-        logging.debug(shelf)
-        logging.debug(f"Attempting to shelve {book.title} on shelf {shelf.uuid}")
+        logger.debug(shelf)
+        logger.debug(f"Attempting to shelve {book.title} on shelf {shelf.uuid}")
 
         for shelved_book in books_on_shelf:
             hw = int(shelved_book[1] / 2)  # halved width
             start = int(shelved_book[2] - hw)
             end = int(shelved_book[2] + hw)
-            logging.debug(f"    {shelved_book[0]} in position {start}-{end}")
+            logger.debug(f"    {shelved_book[0]} in position {start}-{end}")
 
             curr = start if start in empty else start + 1
 
@@ -211,7 +211,7 @@ def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops_DB, 
                 try:
                     empty.remove(curr)
                 except ValueError:
-                    logging.debug("that fucking empty.remove(curr) bug, bestie, fix it")
+                    logger.debug("that fucking empty.remove(curr) bug, bestie, fix it")
 
                 curr += 1
 
@@ -242,12 +242,12 @@ def suggest_position(book: Book, room_shelves: dict[str, Shelf], DB: db_ops_DB, 
             continue
 
         gaps[-1].append(empty[-1])
-        logging.debug(f"    Gaps found - {gaps}")
+        logger.debug(f"    Gaps found - {gaps}")
 
         gaps = sorted(gaps, key=lambda x: x[1] - x[0], reverse=True)
         # Find the largest gap
         largest = gaps[0][1] - gaps[0][0]
-        logging.debug(
+        logger.debug(
             f"    The largest gap on shelf {shelf.name} ({shelf.uuid}) is {largest}mm. Book is {book.width}mm wide and would {'not ' if book.width > largest else ''}fit."
         )
 
@@ -435,6 +435,14 @@ def hit_endpoint(request: Request, uuid: str):
 @app.get("/edit/{uuid}", response_class=HTMLResponse)
 def edit_book(request: Request, uuid: str):
     book_data = format_db_record_as_book(DB.fetchone("""SELECT * FROM books WHERE uuid = ? """, (uuid,)))
+    if book_data.shelf_name is None:
+        book_data.shelf_name = ""
+    if book_data.time is None:
+        book_data.time = ""
+    if book_data.user is None:
+        book_data.user = ""
+    if book_data.natlangpos is None:
+        book_data.natlangos = ""
 
     return templates.TemplateResponse(
         request=request,
@@ -449,6 +457,7 @@ def edit_book(request: Request, uuid: str):
 
 @app.post("/update")
 async def update_book(book: Annotated[Book, Form()]):
+    logger.info(f"Updating {book.title}")
     if book.time != "0":
         time = round(float(book.time))
 
