@@ -7,7 +7,7 @@
 
         <meta name="viewport" content="width=device-width, initial-scale=1.0" >
         <script>
-        console.log("{{shelves}}");
+            console.log("{{rooms}}");
         </script>
     </head>
     <body>
@@ -15,26 +15,40 @@
         <form action="/{{ loctype }}add" method="post">
             <input type="text" id="uuid" name="uuid" value="" hidden>
             <p>Name:  <input type="text" id="name" name="name" value=""><p>
-            <p {% if loctype == "room" %}hidden{% endif %}>Width: <input type="text" id="width" name="width" value="" ></p>
-            <p {% if loctype == "room" %}hidden{% endif %}>In room: <select id="room" name="room"></p>
-                {% for room in rooms %}
-                <option value="{{ room.uuid }}">{{ room.name }}</option>
-                {% endfor %}
+                <select id="shelves" hidden></select>
+                <p {% if loctype == "room" %}hidden{% endif %}>Width (mm): <input type="text" id="width" name="width" value="" ></p>
+                <p {% if loctype == "room" %}hidden{% endif %}>In room: <select id="room" name="room"></p>
+                    {% for room in rooms %}
+                        <option value="{{ rooms[room]['uuid'] }}">{{ rooms[room]['name'] }}</option>
+                    {% endfor %}
                 </select>
             </p>
-            <input class="button-3" role="button" type="submit" value="Add {{ loctype }}">
-            <p {% if loctype != "room" %}hidden{% endif %}> Existing rooms are:</p>
-            <ul {% if loctype != "room" %}hidden{% endif %}>
+                <input class="button-3" role="button" type="submit" value="Add {{ loctype }}">
+            </form>
+            <div {% if loctype != "room" %}hidden{% endif %}>
+                <p>Existing rooms are:</p>
+                <ul>
+                    {% for room in rooms %}
+                        <li>{{ rooms[room]['name'] }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div {% if loctype != "shelf" %}hidden{% endif %}>
+                <p> Existing shelves are:</p>
                 {% for room in rooms %}
-                <li>{{ room.name }}</li>
+                    <h3>{{ rooms[room]['name'] }}</h3>
+                    <ul>
+                        <script>
+                            console.log("Room: {{rooms[room]}}");
+                        </script>
+                        {% for shelf in rooms[room]['shelves'] %}
+                            <script>
+                                console.log("{{rooms[room]['shelves'][shelf]['name']}}");
+                            </script>
+                            <li>{{ rooms[room]['shelves'][shelf]['name'] }}</li>
+                        {% endfor %}
+                    </ul>
                 {% endfor %}
-            </ul>
-            <p {% if loctype != "shelf" %}hidden{% endif %}> Existing shelves are:</p>
-            <ul {% if loctype != "shelf" %}hidden{% endif %}>
-                {% for shelf in shelves %}
-                <li>{{ shelf.name }}</li>
-                {% endfor %}
-            </ul>
-        </form>
-    </body>
-</html>
+            </div>
+        </body>
+    </html>

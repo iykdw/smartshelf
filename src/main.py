@@ -598,6 +598,7 @@ def locate(uuid: str, request: Request):
 @app.get("/addroom", response_class=HTMLResponse)
 def add_room(request: Request):
     rooms = get_rooms()
+    logger.info(rooms)
     return templates.TemplateResponse(
         request=request,
         name="add_location.html",
@@ -609,8 +610,10 @@ def add_room(request: Request):
 
 
 @app.post("/roomadd")
-def _add_room(room: Annotated[Room, Form()]):
-    room.uuid = str(uuid4())
+def _add_room(name: Annotated[str, Form()]):
+    uuid = str(uuid4())
+
+    room = Room(name=name, uuid=uuid, shelves={})
 
     logger.info(f"Adding room {room.name} with uuid {room.uuid}.")
     DB.execute(
@@ -628,14 +631,12 @@ def _add_room(room: Annotated[Room, Form()]):
 @app.get("/addshelf", response_class=HTMLResponse)
 def add_shelf(request: Request):
     rooms = get_rooms()
-    shelves = get_shelves()
     return templates.TemplateResponse(
         request=request,
         name="add_location.html",
         context={
             "loctype": "shelf",
-            "rooms": [room for room in rooms],
-            "shelves": [shelf.model_dump() for shelf in shelves],
+            "rooms": rooms,
         },
     )
 
@@ -647,13 +648,8 @@ def _add_shelf(shelf: Annotated[Shelf, Form()]):
 
     logger.info(f"Adding shelf {shelf.name} with uuid {shelf.uuid} in room {room}.")
     DB.execute(
-        """INSERT INTO shelves VALUES (?, ?, ?, ?)""",
-        (
-            shelf.uuid,
-            shelf.name,
-            int(shelf.width),
-            shelf.room,
-        ),
+        """INSERT INTO shelves VALUES (?, ?, ?, ?, ?, ?)""",
+        (shelf.uuid, shelf.name, int(shelf.width), shelf.room, 0, 0),
     )
 
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
