@@ -49,8 +49,6 @@
                     const shelves = document.getElementById("shelf");
                     const newchildren = [];
                     let data = JSON.parse(event.data);
-                    console.log("Received message:");
-                    console.log(data);
                     data["shelves"].forEach(function(shelf) {
                         const option = document.createElement("option");
                         option.value = shelf['uuid']
@@ -63,18 +61,14 @@
                         }
                         newchildren.push(option);
                     });
-                    console.log(newchildren)
                     shelves.replaceChildren(...newchildren);
                     document.getElementById("neighbour").innerText = data.neighbour;
-                    console.log(data.natlangpos);
-                    console.log(document.getElementById("natlangpos_display").innerText);
+                    document.getElementById("position").innerText = data.position;
                     document.getElementById("natlangpos_display").innerText = data.natlangpos;
                 };
                 function sendData() {
                     const room = document.getElementById("room");
-                    console.log("Sending room value: " + room.value);
                     const shelf = document.getElementById("shelf");
-                    console.log("Sending shelf value: " + shelf.value);
                     socket.send(JSON.stringify({"room": room.value, "shelf": shelf.value, "uuid": "{{ book.uuid }}"}));
                 }
             </script>

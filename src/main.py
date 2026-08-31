@@ -707,7 +707,13 @@ async def shelve_websocket(websocket: WebSocket):
 
         logger.info(f"{book_data.title} can be shelved on {num_viable_shelves} out of a possible {len(room.shelves)}.")
 
-        response = {"neighbour": neighbour, "natlangpos": position.natlangpos, "shelves": shelves_list[::-1], "shelf": suggested_shelf}
+        response = {
+            "neighbour": neighbour,
+            "natlangpos": position.natlangpos,
+            "position": position.position,
+            "shelves": shelves_list[::-1],
+            "shelf": suggested_shelf,
+        }
 
         logger.info(f"Response: \n    {pprint.pformat(response, indent=4, width=140)}")
 
