@@ -25,6 +25,8 @@
                 {% endfor %}
             </select>
             <input type="text" id="time" name="time" value="{{ time }}" hidden>
+            <input type="text" id="shelf_name" name="shelf_name" value="{{ book.shelf_name }}" hidden>
+            <input type="text" id="natlangpos" name="natlangpos" value="{{ book.natlangpos }}" hidden>
             <input type="text" id="withdrawn" name="withdrawn" value="withdrawn" hidden>
             <input class="button-3" role="button" type="submit" value="Submit">
         </form>
