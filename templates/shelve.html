@@ -40,18 +40,9 @@
             <input type="text" id="natlangpos" name="natlangpos" value="{{ book.natlangpos }}" hidden>
             <input style="margin-top: 15px; "class="button-3" role="button" type="submit" value="Shelve">
         </form>
-        <p>Shelve next to <span id="neighbour">{{ neighbour }}</span>, <span id="natlangpos">{{ book.natlangpos }}.</p>
+        <p>Shelve next to <span id="neighbour">{{ neighbour }}</span>, <span id="natlangpos_display">{{ book.natlangpos }}.</p>
 
             <script>
-                console.log("Rooms: ")
-                {% for room in rooms %}
-                    console.log(" - {{ room }}");
-                {% endfor %}
-                console.log("Shelves: ")
-                {% for shelf in shelves %}
-                    console.log(" - {{ shelf }}");
-                {% endfor %}
-                console.log("Socket address: {{ ws_address }}");
                 const socket = new WebSocket("{{ ws_address }}");
 
                 socket.onmessage = function(event) {
@@ -75,7 +66,9 @@
                     console.log(newchildren)
                     shelves.replaceChildren(...newchildren);
                     document.getElementById("neighbour").innerText = data.neighbour;
-                    document.getElementById("natlangpos").innerText = data.natlangpos;
+                    console.log(data.natlangpos);
+                    console.log(document.getElementById("natlangpos_display").innerText);
+                    document.getElementById("natlangpos_display").innerText = data.natlangpos;
                 };
                 function sendData() {
                     const room = document.getElementById("room");
