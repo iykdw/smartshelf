@@ -373,7 +373,7 @@ def format_db_record_as_book(record: BookRecordFromDB) -> Book:
 
 @app.get("/", response_class=HTMLResponse)
 def get_library(request: Request):
-    if request["type"] == "https":
+    if request.url.scheme == "https":
         ws_address = f"wss://{str(request.url).split('/')[2]}/search"
     else:
         ws_address = f"ws://{str(request.url).split('/')[2]}/search"
@@ -490,7 +490,7 @@ async def update_book(book: Annotated[Book, Form()]):
 
 @app.get("/shelve/{book_uuid}", response_class=HTMLResponse)
 async def shelve(book_uuid: str, request: Request):
-    if request["type"] == "https":
+    if request.url.scheme == "https":
         ws_address = f"wss://{str(request.url).split('/')[2]}/shelve"
     else:
         ws_address = f"ws://{str(request.url).split('/')[2]}/shelve"
