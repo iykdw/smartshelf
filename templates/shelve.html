@@ -35,6 +35,9 @@
             <input type="number" id="position" name="position" value="{{ book.position }}" hidden>
             <input type="text" id="withdrawn" name="withdrawn" value="shelved" hidden>
             <input type="text" id="time" name="time" value="{{ time }}" hidden>
+            <input type="text" id="shelf_name" name="shelf_name" value="{{ book.shelf_name }}" hidden>
+            <input type="text" id="user" name="user" value="{{ book.user }}" hidden>
+            <input type="text" id="natlangpos" name="natlangpos" value="{{ book.natlangpos }}" hidden>
             <input style="margin-top: 15px; "class="button-3" role="button" type="submit" value="Shelve">
         </form>
         <p>Shelve next to <span id="neighbour">{{ neighbour }}</span>, <span id="natlangpos">{{ book.natlangpos }}.</p>
