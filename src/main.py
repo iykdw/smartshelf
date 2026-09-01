@@ -458,6 +458,9 @@ def edit_book(request: Request, uuid: str):
 @app.post("/update")
 async def update_book(book: Annotated[Book, Form()]):
     logger.info(f"Updating {book.title}")
+    rooms = get_rooms()
+    logger.info(book.room)
+    book.shelf_name = rooms[book.room].shelves[book.shelf].name
     if book.time != "0":
         time = round(float(book.time))
 

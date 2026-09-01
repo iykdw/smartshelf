@@ -63,8 +63,10 @@
                     });
                     shelves.replaceChildren(...newchildren);
                     document.getElementById("neighbour").innerText = data.neighbour;
-                    document.getElementById("position").innerText = data.position;
+                    document.getElementById("position").value = data.position;
                     document.getElementById("natlangpos_display").innerText = data.natlangpos;
+                    document.getElementById("natlangpos").setAttribute('value', data.natlangpos);
+
                 };
                 function sendData() {
                     const room = document.getElementById("room");
