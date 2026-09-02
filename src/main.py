@@ -449,7 +449,7 @@ def edit_book(request: Request, uuid: str):
         name="validate.html",
         context={
             "book": book_data,
-            "rooms": [get_rooms()[room].name for room in get_rooms()],
+            "rooms": get_rooms().values(),
             "mm_per_page": mm_per_page,
         },
     )
@@ -460,7 +460,10 @@ async def update_book(book: Annotated[Book, Form()]):
     logger.info(f"Updating {book.title}")
     rooms = get_rooms()
     logger.info(book.room)
-    book.shelf_name = rooms[book.room].shelves[book.shelf].name
+    if book.shelf != "":
+        book.shelf_name = rooms[book.room].shelves[book.shelf].name
+        book, _ = suggest_position(book, {book.shelf: rooms[book.room].shelves[book.shelf]}, DB)
+
     if book.time != "0":
         time = round(float(book.time))
 
